@@ -11,6 +11,7 @@ import (
 	"github.com/sinaw369/Hermes/forms/logsScreen"
 	"github.com/sinaw369/Hermes/forms/progressScreen"
 	"github.com/sinaw369/Hermes/forms/screen"
+	HermesList "github.com/sinaw369/Hermes/list"
 	"github.com/sinaw369/Hermes/logWriter"
 	"github.com/sinaw369/Hermes/messages"
 	"log"
@@ -38,7 +39,7 @@ var (
 // Model defines the state of the entire application.
 type Model struct {
 	currentScreen      Screen
-	optionList         *SyncerList.Model
+	optionList         *HermesList.Model
 	pullScreen         *screen.Model
 	autoMergeReqScreen *screen.Model
 	progressScreen     *progressScreen.Model
@@ -144,7 +145,7 @@ func (m *Model) updateWelcomeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateListScreen handles updates specific to the List Screen.
 func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedList, cmd := m.optionList.Update(msg)
-	m.optionList = updatedList.(*SyncerList.Model)
+	m.optionList = updatedList.(*HermesList.Model)
 
 	// Check if an option was selected.
 	if m.optionList.Choice != "" {
@@ -312,7 +313,7 @@ func (m *Model) viewWelcomeScreen() string {
 // InitialModel sets up the initial state of the application.
 func InitialModel() *Model {
 	// Define the option list for the List Screen.
-	oplist := SyncerList.ButtonList{
+	oplist := HermesList.ButtonList{
 		ListItems:        []string{constants.OptionListPullPr, constants.OptionListAutoMergeReq, constants.OptionListLogs, "Quit"},
 		Title:            "Hermes Options",
 		ListWidth:        30,
@@ -432,7 +433,7 @@ func InitialModel() *Model {
 	autoMergeLogger := logWriter.NewLogger(logsScreenModel.AddTab("Merge Logs"), true)
 	autoMergeLogger.InfoString("starting auto merge operations...")
 	// Initialize the option list model.
-	optionListModel := SyncerList.InitialModel(oplist, mainLogger)
+	optionListModel := HermesList.InitialModel(oplist, mainLogger)
 	// Initialize the Pull Screen with its logger.
 	pullScreenModel := screen.NewModel(pullFields, pullLogger)
 	mergeScreenModel := screen.NewModel(mergeRequestFields, autoMergeLogger)
