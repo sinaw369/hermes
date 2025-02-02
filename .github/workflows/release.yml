@@ -3,7 +3,10 @@ name: Go Release
 on:
   push:
     tags:
-      - "v*"  # Trigger on semantic version tags (v1.2.3)
+      - "v*"
+
+permissions:
+  contents: write  # Grant write permission to contents (for creating releases)
 
 jobs:
   build-and-release:
@@ -15,7 +18,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.23.5"
+          go-version: "1.21"
 
       - name: Build binaries
         run: |
