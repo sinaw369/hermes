@@ -460,7 +460,7 @@ func main() {
 	m.logWriter.InfoString("Application Version 0.0.1")
 
 	// Start the Bubble Tea program.
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithMouseAllMotion())
 	if _, err := p.Run(); err != nil {
 		log.Fatalf("Error running program: %v", err)
 	}
