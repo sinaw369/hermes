@@ -3,8 +3,8 @@ package screen
 
 import (
 	"fmt"
-	"github.com/sinaw369/Hermes/logWriter"
-	"github.com/sinaw369/Hermes/messages"
+	"github.com/sinaw369/Hermes/internal/logWriter"
+	"github.com/sinaw369/Hermes/internal/message"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -128,7 +128,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "ctrl+c", "esc":
 			if msg.String() == "esc" {
-				return m, func() tea.Msg { return messages.BackMsg{} }
+				return m, func() tea.Msg { return message.BackMsg{} }
 			}
 			return m, tea.Quit
 

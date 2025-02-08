@@ -2,19 +2,20 @@
 package client
 
 import (
+	"context"
 	"fmt"
-	"github.com/sinaw369/Hermes/constants"
-	"github.com/sinaw369/Hermes/forms/logsScreen"
-	"github.com/sinaw369/Hermes/forms/progressScreen"
-	"github.com/sinaw369/Hermes/logWriter"
-	"github.com/xanzy/go-gitlab"
+	"github.com/sinaw369/Hermes/internal/constant"
+	"github.com/sinaw369/Hermes/internal/form/logsScreen"
+	"github.com/sinaw369/Hermes/internal/form/progressScreen"
+	"github.com/sinaw369/Hermes/internal/logWriter"
+	"gitlab.com/gitlab-org/api/client-go"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
 
-// GitlabClient struct manages GitLab interactions.
+// GitlabClient manages GitLab interactions.
 type GitlabClient struct {
 	gitlabToken string
 	gitlabURL   string
@@ -23,29 +24,68 @@ type GitlabClient struct {
 	logWriter   *logWriter.Logger
 }
 
-// New initializes and returns a GitlabClient instance.
-func New(updatesChan chan<- progressScreen.PackageUpdate, contextMap map[string]string,
-	logger *logsScreen.LogModel) (*GitlabClient, error) {
+// NewTUIGitClient is for TUI usage: it accepts an updates channel and a TUI logs model.
+func NewTUIGitClient(
+	ctx context.Context,
+	updatesChan chan<- progressScreen.PackageUpdate,
+	contextMap map[string]string,
+	logsModel *logsScreen.LogModel,
+) (*GitlabClient, error) {
+
+	// We rely on TUI logs for output
+	// Optionally store ctx for cancellation/timeouts
+	return newGitlabClient(ctx, updatesChan, contextMap, logsModel)
+}
+
+// NewCLIGitClient is for CLI usage: no TUI logs, no progress channel.
+// Typically, you don't need a channel at all, or you pass nil to skip sending.
+func NewCLIGitClient(
+	ctx context.Context,
+	contextMap map[string]string,
+) (*GitlabClient, error) {
+	return newGitlabClient(ctx, nil, contextMap, nil)
+}
+
+// newGitlabClient is the common internal constructor that reads GITLAB_TOKEN, etc.
+func newGitlabClient(
+	ctx context.Context,
+	updatesChan chan<- progressScreen.PackageUpdate,
+	contextMap map[string]string,
+	logsModel *logsScreen.LogModel,
+) (*GitlabClient, error) {
 
 	// Fetch the GitLab token and URL from environment variables
 	gitlabToken := os.Getenv("GITLAB_TOKEN")
 	gitlabURL := os.Getenv("GITLAB_BASE_URL")
 
-	// Check if the environment variables are set
 	if gitlabToken == "" || gitlabURL == "" {
 		return nil, fmt.Errorf("error: GITLAB_TOKEN or GITLAB_BASE_URL is not set in environment")
 	}
+	// Check if the detach mode flag is set
+	disabled := false
+	if contextMap[constant.DetachMode] == "YES" {
+		disabled = true
+	}
 
-	log := logWriter.NewLogger(logger.AddTab(constants.LGitClient), false)
-	log.InfoString("Starting the GitLab client application...")
+	var log *logWriter.Logger
+	if logsModel != nil {
+		tab := logsModel.AddTab(constant.LGitClient)
+		log = logWriter.NewLogger(tab, true, disabled)
+		log.InfoString("Starting the GitLab client for TUI usage...")
+	} else {
+		log = logWriter.NewLogger(os.Stdout, true, disabled)
+		log.InfoString("Starting the GitLab client for CLI usage...")
+	}
 
-	return &GitlabClient{
+	client := &GitlabClient{
 		gitlabToken: gitlabToken,
 		gitlabURL:   gitlabURL,
 		updatesChan: updatesChan,
 		contextMap:  contextMap,
 		logWriter:   log,
-	}, nil
+	}
+
+	return client, nil
 }
 
 // getBaseDir returns the base directory for the project, either from context or default.
@@ -130,9 +170,9 @@ func (g *GitlabClient) fetchGitLabProjects(client *gitlab.Client) ([]*gitlab.Pro
 // shouldIncludeProject checks if a GitLab project matches the include criteria.
 func (g *GitlabClient) shouldIncludeProject(project *gitlab.Project) bool {
 	// If Include fields are empty, they should be ignored.
-	includeSSHURL := g.contextMap[constants.PullFieldSSHURLInclude]
-	includeField := g.contextMap[constants.PullFieldInclude]
-	excludeField := g.contextMap[constants.PullFieldExclude]
+	includeSSHURL := g.contextMap[constant.PullFieldSSHURLInclude]
+	includeField := g.contextMap[constant.PullFieldInclude]
+	excludeField := g.contextMap[constant.PullFieldExclude]
 
 	// If all include fields are empty, return true (not filtering)
 	if includeSSHURL == "" && includeField == "" && excludeField == "" {
@@ -158,7 +198,7 @@ func (g *GitlabClient) shouldIncludeProject(project *gitlab.Project) bool {
 }
 
 // processProjectsConcurrently processes the projects with concurrency.
-func (g *GitlabClient) processProjectsConcurrently(projects []*gitlab.Project, baseDir string) {
+func (g *GitlabClient) processProjectsConcurrentlyTUI(projects []*gitlab.Project, baseDir string) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 10) // Limit to 10 concurrent operations
 
@@ -196,4 +236,31 @@ func (g *GitlabClient) processProjectsConcurrently(projects []*gitlab.Project, b
 	wg.Wait()
 	g.logWriter.GreenString("Finished processing all repositories.")
 	close(g.updatesChan)
+}
+
+// processProjectsConcurrently processes the projects with concurrency.
+func (g *GitlabClient) processProjectsConcurrentlyCLI(projects []*gitlab.Project, baseDir string) {
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10) // Limit to 10 concurrent operations
+
+	for idx, project := range projects {
+		wg.Add(1)
+		sem <- struct{}{} // Acquire semaphore
+		go func(idx int, project *gitlab.Project) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release semaphore
+
+			repoURL := project.SSHURLToRepo
+			g.logWriter.BlueString("Processing repository: %s", repoURL)
+
+			err := CloneOrPullRepo(g.logWriter, repoURL, baseDir)
+			if err != nil {
+				g.logWriter.ErrorString("Error cloning/pulling repository: %v", err)
+				return
+			}
+		}(idx, project)
+	}
+
+	wg.Wait()
+	g.logWriter.GreenString("Finished processing all repositories.")
 }

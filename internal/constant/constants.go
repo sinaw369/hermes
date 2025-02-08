@@ -1,4 +1,4 @@
-package constants
+package constant
 
 const (
 	LApplication = "Application"
@@ -22,6 +22,10 @@ const (
 	MergeFieldMergeRequestTitle        = "Title"
 	MergeFieldMergeRequestDescription  = "Description"
 	MergeFieldMergeRequestTargetBranch = "Target Branch"
+
+	TargetDir    = "dir"
+	SyncInterval = "interval"
+	DetachMode   = "detach mode"
 )
 
 const AppLogo = `

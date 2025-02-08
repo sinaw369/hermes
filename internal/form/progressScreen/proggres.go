@@ -3,8 +3,8 @@ package progressScreen
 
 import (
 	"fmt"
-	"github.com/sinaw369/Hermes/logWriter"
-	"github.com/sinaw369/Hermes/messages"
+	"github.com/sinaw369/Hermes/internal/logWriter"
+	"github.com/sinaw369/Hermes/internal/message"
 	"strings"
 	"time"
 
@@ -151,7 +151,7 @@ Loop:
 		switch msg.String() {
 		case "esc":
 			m.logWriter.InfoString("Esc key pressed. Sending BackMsg.")
-			return m, func() tea.Msg { return messages.BackMsg{} }
+			return m, func() tea.Msg { return message.BackMsg{} }
 		case "ctrl+c":
 			m.logWriter.InfoString("Ctrl+C pressed. Quitting.")
 			return m, tea.Quit

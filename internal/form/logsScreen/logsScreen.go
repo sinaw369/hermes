@@ -4,7 +4,7 @@ package logsScreen
 import (
 	"bytes"
 	"fmt"
-	"github.com/sinaw369/Hermes/messages"
+	"github.com/sinaw369/Hermes/internal/message"
 	"strings"
 	"sync"
 	"time"
@@ -66,7 +66,7 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "esc":
-			return m, func() tea.Msg { return messages.BackMsg{} }
+			return m, func() tea.Msg { return message.BackMsg{} }
 		case "right":
 			m.mu.Lock()
 			if len(m.tabs) > 0 {
@@ -105,7 +105,7 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Tick(time.Second, func(t time.Time) tea.Msg {
 			return t
 		})
-	case messages.BackMsg:
+	case message.BackMsg:
 		// Handle BackMsg if needed
 	}
 

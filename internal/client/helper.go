@@ -3,8 +3,8 @@ package client
 import (
 	"bufio"
 	"fmt"
-	"github.com/sinaw369/Hermes/logWriter"
-	"github.com/xanzy/go-gitlab"
+	"github.com/sinaw369/Hermes/internal/logWriter"
+	"gitlab.com/gitlab-org/api/client-go"
 	"io"
 	"net/url"
 	"os"
@@ -92,16 +92,16 @@ func CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDir string) error {
 	if err != nil {
 		return err
 	}
-	path := strings.TrimPrefix(u.Path, "/")
-	path = strings.TrimSuffix(path, ".git")
-	repoPath := filepath.Join(baseDir, path)
+	trimPrefix := strings.TrimPrefix(u.Path, "/")
+	trimPrefix = strings.TrimSuffix(trimPrefix, ".git")
+	repoPath := filepath.Join(baseDir, trimPrefix)
 
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		logger.BlueString("Cloning repository: %s", repoURL)
 		return runCommand(logger, "", "git", "clone", repoURL, repoPath)
 	} else {
 		// Pull the latest changes
-		logger.BlueString("Pulling latest changes for repository: %s", repoURL)
+		logger.MagentaString("Pulling latest changes for repository: %s", repoURL)
 		return runCommand(logger, repoPath, "git", "pull")
 	}
 }

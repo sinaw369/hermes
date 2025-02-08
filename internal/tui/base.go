@@ -1,20 +1,18 @@
-// File: main.go
-package main
+package tui
 
 import (
 	"context"
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sinaw369/Hermes/client"
-	"github.com/sinaw369/Hermes/constants"
-	"github.com/sinaw369/Hermes/forms/logsScreen"
-	"github.com/sinaw369/Hermes/forms/progressScreen"
-	"github.com/sinaw369/Hermes/forms/screen"
-	HermesList "github.com/sinaw369/Hermes/list"
-	"github.com/sinaw369/Hermes/logWriter"
-	"github.com/sinaw369/Hermes/messages"
-	"log"
+	"github.com/sinaw369/Hermes/internal/client"
+	"github.com/sinaw369/Hermes/internal/constant"
+	"github.com/sinaw369/Hermes/internal/form/logsScreen"
+	"github.com/sinaw369/Hermes/internal/form/progressScreen"
+	"github.com/sinaw369/Hermes/internal/form/screen"
+	HermesList "github.com/sinaw369/Hermes/internal/list"
+	"github.com/sinaw369/Hermes/internal/logWriter"
+	"github.com/sinaw369/Hermes/internal/message"
 	"time"
 )
 
@@ -45,7 +43,7 @@ type Model struct {
 	progressScreen     *progressScreen.Model
 	logsScreen         *logsScreen.LogModel
 	quitting           bool
-	logWriter          *logWriter.Logger
+	LogWriter          *logWriter.Logger
 	width              int // Window width
 	height             int // Window height
 }
@@ -59,19 +57,19 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle quitting.
 	if m.quitting {
-		m.logWriter.InfoString("Quitting the application.")
+		m.LogWriter.InfoString("Quitting the application.")
 		return m, tea.Quit
 	}
 
 	switch msg := msg.(type) {
-	case messages.BackMsg:
-		m.logWriter.InfoString("Received BackMsg. Handling back navigation.")
+	case message.BackMsg:
+		m.LogWriter.InfoString("Received BackMsg. Handling back navigation.")
 		return m.handleBack()
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.logWriter.InfoString("Window size changed: Width=%d, Height=%d", m.width, m.height)
+		m.LogWriter.InfoString("Window size changed: Width=%d, Height=%d", m.width, m.height)
 		return m.updateCurrentScreenSize(msg)
 
 	default:
@@ -121,7 +119,7 @@ func (m *Model) handleBack() (tea.Model, tea.Cmd) {
 	default:
 		m.currentScreen = ScreenWelcome
 	}
-	m.logWriter.InfoString("Navigated back to screen: %v", m.currentScreen)
+	m.LogWriter.InfoString("Navigated back to screen: %v", m.currentScreen)
 	return m, nil
 }
 
@@ -130,11 +128,11 @@ func (m *Model) updateWelcomeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "enter":
-			m.logWriter.InfoString("Enter pressed. Switching to List Screen.")
+			m.LogWriter.InfoString("Enter pressed. Switching to List Screen.")
 			m.currentScreen = ScreenList
 			return m, nil
 		case "q", "ctrl+c":
-			m.logWriter.InfoString("Quit command received. Quitting application.")
+			m.LogWriter.InfoString("Quit command received. Quitting application.")
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -149,17 +147,17 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Check if an option was selected.
 	if m.optionList.Choice != "" {
-		m.logWriter.InfoString("Option selected: %s", m.optionList.Choice)
+		m.LogWriter.InfoString("Option selected: %s", m.optionList.Choice)
 		switch m.optionList.Choice {
-		case constants.OptionListPullPr:
+		case constant.OptionListPullPr:
 			m.currentScreen = ScreenPull
-		case constants.OptionListAutoMergeReq:
+		case constant.OptionListAutoMergeReq:
 			m.currentScreen = ScreenAutoMergeReq
-		case constants.OptionListLogs:
-			m.logWriter.YellowString("Switching to Logs Screen...")
+		case constant.OptionListLogs:
+			m.LogWriter.YellowString("Switching to Logs Screen...")
 			m.currentScreen = ScreenLogs
 		case "Quit":
-			m.logWriter.InfoString("Quit option selected. Quitting application.")
+			m.LogWriter.InfoString("Quit option selected. Quitting application.")
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -176,8 +174,8 @@ func (m *Model) updatePullScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// If the form was submitted, begin GitLab processing.
 	if m.pullScreen.Submitted {
-		m.logWriter.BlueString("Form submission complete. Starting processing...")
-		m.logWriter.YellowString("Switching to Progress Screen...")
+		m.LogWriter.BlueString("Form submission complete. Starting processing...")
+		m.LogWriter.YellowString("Switching to Progress Screen...")
 		m.currentScreen = ScreenProgress
 
 		// Create updates channel and a context for cancellation.
@@ -190,24 +188,24 @@ func (m *Model) updatePullScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		values := m.pullScreen.GetValue()
 
 		// Initialize the GitLab client with the context.
-		gClient, err := gitClient(ctx, updatesChan, values, m.logsScreen, m.logWriter)
+		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.logsScreen)
 		if err != nil {
-			m.logWriter.RedString("GitClient Initialization Failed: %v", err)
+			m.LogWriter.RedString("GitClient Initialization Failed: %v", err)
 			m.currentScreen = ScreenLogs
-			m.logsScreen.SetActiveTabByName(constants.LGitClient)
+			m.logsScreen.SetActiveTabByName(constant.LGitClient)
 
-			updatedLogsScreen, logCmd := m.logsScreen.Update(messages.BackMsg{})
+			updatedLogsScreen, logCmd := m.logsScreen.Update(message.BackMsg{})
 			m.logsScreen = updatedLogsScreen.(*logsScreen.LogModel)
-			m.logWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
+			m.LogWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
 			return m, logCmd
 		}
 
-		m.logWriter.YellowString("Pull Automation Starting...")
+		m.LogWriter.YellowString("Pull Automation Starting...")
 		// Launch the GitLab client processing in a separate goroutine.
-		go gClient.InitPullRequestAutomation() // (Note: If desired, gClient can be enhanced to accept the context.)
+		go gClient.InitPullRequestAutomationTUI(nil) // (Note: If desired, gClient can be enhanced to accept the context.)
 
 		// Initialize the progress screen with the updates channel.
-		m.progressScreen = progressScreen.NewModel(updatesChan, m.logWriter)
+		m.progressScreen = progressScreen.NewModel(updatesChan, m.LogWriter)
 		return m, m.progressScreen.Init()
 	}
 
@@ -221,8 +219,8 @@ func (m *Model) updateAutoMergeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// If the form was submitted, begin GitLab processing.
 	if m.autoMergeReqScreen.Submitted {
-		m.logWriter.BlueString("Form submission complete. Starting processing...")
-		m.logWriter.YellowString("Switching to Progress Screen...")
+		m.LogWriter.BlueString("Form submission complete. Starting processing...")
+		m.LogWriter.YellowString("Switching to Progress Screen...")
 		m.currentScreen = ScreenProgress
 
 		// Create updates channel and a context for cancellation.
@@ -235,24 +233,24 @@ func (m *Model) updateAutoMergeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		values := m.autoMergeReqScreen.GetValue()
 
 		// Initialize the GitLab client with the context.
-		gClient, err := gitClient(ctx, updatesChan, values, m.logsScreen, m.logWriter)
+		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.logsScreen)
 		if err != nil {
-			m.logWriter.RedString("GitClient Initialization Failed: %v", err)
+			m.LogWriter.RedString("GitClient Initialization Failed: %v", err)
 			m.currentScreen = ScreenLogs
-			m.logsScreen.SetActiveTabByName(constants.LGitClient)
+			m.logsScreen.SetActiveTabByName(constant.LGitClient)
 
-			updatedLogsScreen, logCmd := m.logsScreen.Update(messages.BackMsg{})
+			updatedLogsScreen, logCmd := m.logsScreen.Update(message.BackMsg{})
 			m.logsScreen = updatedLogsScreen.(*logsScreen.LogModel)
-			m.logWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
+			m.LogWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
 			return m, logCmd
 		}
 
-		m.logWriter.YellowString("Pull Automation Starting...")
+		m.LogWriter.YellowString("Pull Automation Starting...")
 		// Launch the GitLab client processing in a separate goroutine.
 		go gClient.InitMergeAutomationFromDir() // (Note: If desired, gClient can be enhanced to accept the context.)
 
 		// Initialize the progress screen with the updates channel.
-		m.progressScreen = progressScreen.NewModel(updatesChan, m.logWriter)
+		m.progressScreen = progressScreen.NewModel(updatesChan, m.LogWriter)
 		return m, m.progressScreen.Init()
 	}
 
@@ -266,7 +264,7 @@ func (m *Model) updateProgressScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// When processing is complete, transition to the Logs Screen.
 	if m.progressScreen.Done() {
-		m.logWriter.YellowString("Processing complete. Switching to Logs Screen...")
+		m.LogWriter.YellowString("Processing complete. Switching to Logs Screen...")
 		m.currentScreen = ScreenLogs
 		return m, nil
 	}
@@ -307,25 +305,25 @@ func (m *Model) View() string {
 
 // viewWelcomeScreen renders the Welcome Screen.
 func (m *Model) viewWelcomeScreen() string {
-	return "\n" + logoStyle.Render(constants.AppLogo) + "\nPress Enter to continue."
+	return "\n" + logoStyle.Render(constant.AppLogo) + "\nPress Enter to continue."
 }
 
 // InitialModel sets up the initial state of the application.
 func InitialModel() *Model {
 	// Define the option list for the List Screen.
 	oplist := HermesList.ButtonList{
-		ListItems:        []string{constants.OptionListPullPr, constants.OptionListAutoMergeReq, constants.OptionListLogs, "Quit"},
+		ListItems:        []string{constant.OptionListPullPr, constant.OptionListAutoMergeReq, constant.OptionListLogs, "Quit"},
 		Title:            "Hermes Options",
 		ListWidth:        30,
 		ListHeight:       14,
-		ShowStatusBar:    false,
+		ShowStatusBar:    true,
 		FilteringEnabled: true,
 	}
 
 	// Define the form fields for the Pull Screen.
 	pullFields := []screen.ButtonModel{
 		{
-			Label:       constants.PullFieldInclude,
+			Label:       constant.PullFieldInclude,
 			PlaceHolder: "Include patterns (comma-separated)",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
@@ -337,13 +335,13 @@ func InitialModel() *Model {
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.PullFieldExclude,
+			Label:       constant.PullFieldExclude,
 			PlaceHolder: "Exclude patterns",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.PullFieldPath,
+			Label:       constant.PullFieldPath,
 			PlaceHolder: "Path to download",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
@@ -352,31 +350,31 @@ func InitialModel() *Model {
 	// Define the form fields for the Pull Screen.
 	mergeRequestFields := []screen.ButtonModel{
 		{
-			Label:       constants.MergeFieldCommand,
+			Label:       constant.MergeFieldCommand,
 			PlaceHolder: "go mod tidy;go get githubPkg",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldInclude,
+			Label:       constant.MergeFieldInclude,
 			PlaceHolder: "Include patterns (comma-separated)",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldExclude,
+			Label:       constant.MergeFieldExclude,
 			PlaceHolder: "Exclude patterns",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldPath,
+			Label:       constant.MergeFieldPath,
 			PlaceHolder: "project path",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldMergeRequestTargetBranch,
+			Label:       constant.MergeFieldMergeRequestTargetBranch,
 			PlaceHolder: "target branch (comma-separated)",
 			Width:       50,
 			Validate: func(s string) error {
@@ -387,19 +385,19 @@ func InitialModel() *Model {
 			},
 		},
 		{
-			Label:       constants.MergeFieldBranch,
+			Label:       constant.MergeFieldBranch,
 			PlaceHolder: "branch name",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldCommitMessage,
+			Label:       constant.MergeFieldCommitMessage,
 			PlaceHolder: "commit message",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constants.MergeFieldMergeRequestTitle,
+			Label:       constant.MergeFieldMergeRequestTitle,
 			PlaceHolder: "title",
 			Width:       50,
 			Validate: func(s string) error {
@@ -410,7 +408,7 @@ func InitialModel() *Model {
 			},
 		},
 		{
-			Label:       constants.MergeFieldMergeRequestDescription,
+			Label:       constant.MergeFieldMergeRequestDescription,
 			PlaceHolder: "description",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
@@ -419,18 +417,18 @@ func InitialModel() *Model {
 	// Initialize the Logs Screen.
 	logsScreenModel := logsScreen.InitialModel()
 	// Add a tab for application logs and retrieve it's buffer.
-	logBuf := logsScreenModel.AddTab(constants.LApplication)
+	logBuf := logsScreenModel.AddTab(constant.LApplication)
 	// Initialize the main logger to write to the application log buffer.
-	mainLogger := logWriter.NewLogger(logBuf, true)
+	mainLogger := logWriter.NewLogger(logBuf, true, false)
 	mainLogger.InfoString("starting the application...")
 	mainLogger.InfoString("performing initialization...")
 	mainLogger.InfoString("application running.")
 
 	// Add another tab for Pull Logs and initialize its logger.
-	pullLogger := logWriter.NewLogger(logsScreenModel.AddTab("Pull Logs"), true)
+	pullLogger := logWriter.NewLogger(logsScreenModel.AddTab("Pull Logs"), true, false)
 	pullLogger.InfoString("starting pull operations...")
 	// Add another tab for Pull Logs and initialize its logger.
-	autoMergeLogger := logWriter.NewLogger(logsScreenModel.AddTab("Merge Logs"), true)
+	autoMergeLogger := logWriter.NewLogger(logsScreenModel.AddTab("Merge Logs"), true, false)
 	autoMergeLogger.InfoString("starting auto merge operations...")
 	// Initialize the option list model.
 	optionListModel := HermesList.InitialModel(oplist, mainLogger)
@@ -446,34 +444,8 @@ func InitialModel() *Model {
 		progressScreen:     nil, // Will be initialized later with the updates channel.
 		logsScreen:         logsScreenModel,
 		quitting:           false,
-		logWriter:          mainLogger,
+		LogWriter:          mainLogger,
 		width:              0,
 		height:             0,
 	}
-}
-
-// main is the entry point of the application.
-func main() {
-	// Initialize the application model.
-	m := InitialModel()
-	m.logWriter.InfoString("Welcome to Hermes!")
-	m.logWriter.InfoString("Application Version 0.0.1")
-
-	// Start the Bubble Tea program.
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithMouseAllMotion())
-	if _, err := p.Run(); err != nil {
-		log.Fatalf("Error running program: %v", err)
-	}
-}
-
-// gitClient initializes and returns a new GitlabClient.
-// The new version accepts a context, allowing for cancellation or timeouts if needed.
-func gitClient(ctx context.Context, updatesChan chan<- progressScreen.PackageUpdate, values map[string]string,
-	logsModel *logsScreen.LogModel, logger *logWriter.Logger) (*client.GitlabClient, error) {
-	gitlabClient, err := client.New(updatesChan, values, logsModel)
-	if err != nil {
-		return nil, err
-	}
-	// (Optional) Enhance the client to use the provided context for any long-running operations.
-	return gitlabClient, nil
 }
