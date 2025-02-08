@@ -24,7 +24,7 @@ func main() {
 
 	root.AddCommand(
 		SyncCmd.Command(cfg),
-		HermesCmd.Command(),
+		HermesCmd.Command(cfg),
 	)
 
 	if err := root.Execute(); err != nil {

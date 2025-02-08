@@ -6,12 +6,13 @@ const (
 
 	OptionListPullPr       = "Pull PR"
 	OptionListAutoMergeReq = "Auto Merge Request"
+	OptionListShowProject  = "Files"
 	OptionListLogs         = "Logs"
 
 	PullFieldInclude       = "Include"
 	PullFieldSSHURLInclude = "SSH URL Include"
 	PullFieldExclude       = "Exclude"
-	PullFieldPath          = "Download Path"
+	PullFieldPath          = "Dir Path"
 
 	MergeFieldCommand                  = "merge Command"
 	MergeFieldInclude                  = "Include"
@@ -23,9 +24,12 @@ const (
 	MergeFieldMergeRequestDescription  = "Description"
 	MergeFieldMergeRequestTargetBranch = "Target Branch"
 
-	TargetDir    = "dir"
-	SyncInterval = "interval"
-	DetachMode   = "detach mode"
+	contextValueInclude = "Include"
+	contextValueExclude = "Exclude"
+	contextValueDir     = "Dir Path"
+	TargetDir           = "dir"
+	SyncInterval        = "interval"
+	DetachMode          = "detach mode"
 )
 
 const AppLogo = `

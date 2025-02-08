@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sinaw369/Hermes/internal/client"
+	"github.com/sinaw369/Hermes/internal/config"
 	"github.com/sinaw369/Hermes/internal/constant"
 	"github.com/sinaw369/Hermes/internal/form/logsScreen"
 	"github.com/sinaw369/Hermes/internal/form/progressScreen"
@@ -26,6 +27,7 @@ const (
 	ScreenProgress
 	ScreenLogs
 	ScreenAutoMergeReq
+	ScreenShowFile
 	ScreenQuit
 )
 
@@ -38,6 +40,7 @@ var (
 type Model struct {
 	currentScreen      Screen
 	optionList         *HermesList.Model
+	fileList           *HermesList.Model
 	pullScreen         *screen.Model
 	autoMergeReqScreen *screen.Model
 	progressScreen     *progressScreen.Model
@@ -46,6 +49,7 @@ type Model struct {
 	LogWriter          *logWriter.Logger
 	width              int // Window width
 	height             int // Window height
+	cfg                *config.Config
 }
 
 // Init initializes the application; no initial command is needed.
@@ -87,6 +91,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProgressScreen(msg)
 		case ScreenLogs:
 			return m.updateLogsScreen(msg)
+		case ScreenShowFile:
+			m.fileList.SetPath(m.cfg.FileDir)
+			return m.updateShowFileScreen(msg)
 		}
 	}
 
@@ -114,7 +121,7 @@ func (m *Model) handleBack() (tea.Model, tea.Cmd) {
 	switch m.currentScreen {
 	case ScreenList:
 		m.currentScreen = ScreenWelcome
-	case ScreenPull, ScreenLogs, ScreenProgress, ScreenAutoMergeReq:
+	case ScreenPull, ScreenLogs, ScreenProgress, ScreenAutoMergeReq, ScreenShowFile:
 		m.currentScreen = ScreenList
 	default:
 		m.currentScreen = ScreenWelcome
@@ -156,6 +163,8 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case constant.OptionListLogs:
 			m.LogWriter.YellowString("Switching to Logs Screen...")
 			m.currentScreen = ScreenLogs
+		case constant.OptionListShowProject:
+			m.currentScreen = ScreenShowFile
 		case "Quit":
 			m.LogWriter.InfoString("Quit option selected. Quitting application.")
 			m.quitting = true
@@ -279,6 +288,16 @@ func (m *Model) updateLogsScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateLogsScreen handles updates specific to the Logs Screen.
+func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updatedFileListScreen, cmd := m.fileList.Update(msg)
+	m.fileList = updatedFileListScreen.(*HermesList.Model)
+	if m.fileList.Choice != "" {
+	}
+
+	return m, cmd
+}
+
 // View renders the UI based on the current screen.
 func (m *Model) View() string {
 	if m.quitting {
@@ -296,6 +315,8 @@ func (m *Model) View() string {
 		return m.autoMergeReqScreen.View()
 	case ScreenProgress:
 		return m.progressScreen.View()
+	case ScreenShowFile:
+		return m.fileList.View()
 	case ScreenLogs:
 		return m.logsScreen.View()
 	default:
@@ -309,17 +330,28 @@ func (m *Model) viewWelcomeScreen() string {
 }
 
 // InitialModel sets up the initial state of the application.
-func InitialModel() *Model {
+func InitialModel(cfg *config.Config) *Model {
 	// Define the option list for the List Screen.
-	oplist := HermesList.ButtonList{
-		ListItems:        []string{constant.OptionListPullPr, constant.OptionListAutoMergeReq, constant.OptionListLogs, "Quit"},
+	oplist := HermesList.Config{
+		IsDir:            false,
+		StaticList:       []string{constant.OptionListPullPr, constant.OptionListAutoMergeReq, constant.OptionListShowProject, constant.OptionListLogs, "Quit"},
+		InitialPath:      "./",
 		Title:            "Hermes Options",
-		ListWidth:        30,
-		ListHeight:       14,
-		ShowStatusBar:    true,
+		Width:            30,
+		Height:           14,
+		ShowStatusBar:    false,
 		FilteringEnabled: true,
 	}
-
+	fileList := HermesList.Config{
+		IsDir:            true,
+		StaticList:       nil,
+		InitialPath:      "",
+		Title:            "",
+		Width:            50,
+		Height:           20,
+		ShowStatusBar:    false,
+		FilteringEnabled: true,
+	}
 	// Define the form fields for the Pull Screen.
 	pullFields := []screen.ButtonModel{
 		{
@@ -431,7 +463,10 @@ func InitialModel() *Model {
 	autoMergeLogger := logWriter.NewLogger(logsScreenModel.AddTab("Merge Logs"), true, false)
 	autoMergeLogger.InfoString("starting auto merge operations...")
 	// Initialize the option list model.
-	optionListModel := HermesList.InitialModel(oplist, mainLogger)
+	fileListLogger := logWriter.NewLogger(logsScreenModel.AddTab("File List Logs"), true, false)
+	fileListLogger.InfoString("starting file list operations...")
+	optionListModel, _ := HermesList.NewModel(oplist, mainLogger)
+	fileListModel, _ := HermesList.NewModel(fileList, fileListLogger)
 	// Initialize the Pull Screen with its logger.
 	pullScreenModel := screen.NewModel(pullFields, pullLogger)
 	mergeScreenModel := screen.NewModel(mergeRequestFields, autoMergeLogger)
@@ -439,6 +474,7 @@ func InitialModel() *Model {
 	return &Model{
 		currentScreen:      ScreenWelcome,
 		optionList:         optionListModel,
+		fileList:           fileListModel,
 		pullScreen:         pullScreenModel,
 		autoMergeReqScreen: mergeScreenModel,
 		progressScreen:     nil, // Will be initialized later with the updates channel.
@@ -447,5 +483,6 @@ func InitialModel() *Model {
 		LogWriter:          mainLogger,
 		width:              0,
 		height:             0,
+		cfg:                cfg,
 	}
 }

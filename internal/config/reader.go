@@ -22,6 +22,7 @@ func Load() (config *Config, err error) {
 		GitlabBaseURL: loadString("GITLAB_BASE_URL"),
 		GitlabToken:   loadString("GITLAB_TOKEN"),
 		SyncDir:       loadString("SYNC_DIR"),
+		FileDir:       loadString("FILES_DIR"),
 		SyncInterval:  LoadDuration("SYNC_INTERVAL"),
 	}, nil
 
