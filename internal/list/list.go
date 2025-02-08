@@ -3,15 +3,14 @@ package listview
 
 import (
 	"fmt"
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sinaw369/Hermes/internal/logWriter"
 	"github.com/sinaw369/Hermes/internal/message"
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // -------------------------------------------------------------------
@@ -150,13 +149,13 @@ type Model struct {
 }
 
 // NewModel creates a new Model based on the provided config.
-// In directory mode, if InitialPath is empty, the list is initialized empty.
+// In directory mode, if InitialPath is empty, it falls back to <cwd>/git-repos.
 func NewModel(config Config, logger *logWriter.Logger) (*Model, error) {
 	if config.IsDir {
 		var items []list.Item
 		var title string
 		if config.InitialPath != "" {
-			// Load the directory contents.
+			// Load the directory contents using the provided initial path.
 			var err error
 			items, err = loadDirectory(config.InitialPath)
 			if err != nil {
@@ -164,9 +163,18 @@ func NewModel(config Config, logger *logWriter.Logger) (*Model, error) {
 			}
 			title = fmt.Sprintf("Directory: %s", config.InitialPath)
 		} else {
-			// Start with an empty list.
-			items = []list.Item{}
-			title = "No directory loaded, path is :" + config.InitialPath
+			homeDir, err := os.Getwd()
+			if err != nil {
+				return nil, err
+			}
+			newPath := filepath.Join(homeDir, "git-repos")
+			items, err = loadDirectory(newPath)
+			if err != nil {
+				return nil, err
+			}
+			title = fmt.Sprintf("Directory: %s", newPath)
+			// Update config.InitialPath so that the model is aware of the fallback.
+			config.InitialPath = newPath
 		}
 
 		l := list.New(items, fileDelegate{}, config.Width, config.Height)

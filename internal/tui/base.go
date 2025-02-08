@@ -92,7 +92,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ScreenLogs:
 			return m.updateLogsScreen(msg)
 		case ScreenShowFile:
-			m.fileList.SetPath(m.cfg.FileDir)
 			return m.updateShowFileScreen(msg)
 		}
 	}
@@ -164,6 +163,9 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.LogWriter.YellowString("Switching to Logs Screen...")
 			m.currentScreen = ScreenLogs
 		case constant.OptionListShowProject:
+			if err := m.fileList.SetPath(m.cfg.FileDir); err != nil {
+				m.LogWriter.ErrorString("Error setting file list path: %v", err)
+			}
 			m.currentScreen = ScreenShowFile
 		case "Quit":
 			m.LogWriter.InfoString("Quit option selected. Quitting application.")
