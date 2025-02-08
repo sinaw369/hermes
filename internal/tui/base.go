@@ -163,6 +163,7 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.LogWriter.YellowString("Switching to Logs Screen...")
 			m.currentScreen = ScreenLogs
 		case constant.OptionListShowProject:
+			m.LogWriter.YellowString("Switching to Show project Screen...")
 			if err := m.fileList.SetPath(m.cfg.FileDir); err != nil {
 				m.LogWriter.ErrorString("Error setting file list path: %v", err)
 			}

@@ -151,11 +151,11 @@ type Model struct {
 // NewModel creates a new Model based on the provided config.
 // In directory mode, if InitialPath is empty, it falls back to <cwd>/git-repos.
 func NewModel(config Config, logger *logWriter.Logger) (*Model, error) {
+
 	if config.IsDir {
 		var items []list.Item
 		var title string
 		if config.InitialPath != "" {
-			// Load the directory contents using the provided initial path.
 			var err error
 			items, err = loadDirectory(config.InitialPath)
 			if err != nil {
