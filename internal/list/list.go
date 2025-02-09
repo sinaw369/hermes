@@ -300,7 +300,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				selected, ok := m.List.SelectedItem().(Item)
 				if ok {
 					m.Choice = string(selected)
-					m.logWriter.InfoString("Static item selected: %s", selected)
+					m.logWriter.ErrorString("Static item selected: %s", selected)
 				}
 			}
 		}

@@ -1,10 +1,8 @@
-// File: forms/logsScreen/log_model.go
 package logsScreen
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/sinaw369/Hermes/internal/message"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sinaw369/Hermes/internal/message"
 )
 
 var (
@@ -44,14 +43,13 @@ type tab struct {
 
 type LogModel struct {
 	viewport       viewport.Model
-	tabs           []tab // List of tabs
-	activeTab      int   // Index of the active tab
-	contentChanged bool  // Flag to indicate content update
+	tabs           []tab
+	activeTab      int
+	contentChanged bool
 	mu             sync.Mutex
 }
 
 func (m *LogModel) Init() tea.Cmd {
-	// Set up a ticker to refresh logs every second
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return t
 	})
@@ -70,14 +68,14 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right":
 			m.mu.Lock()
 			if len(m.tabs) > 0 {
-				m.activeTab = (m.activeTab + 1) % len(m.tabs) // Next tab
+				m.activeTab = (m.activeTab + 1) % len(m.tabs)
 				m.contentChanged = true
 			}
 			m.mu.Unlock()
 		case "left":
 			m.mu.Lock()
 			if len(m.tabs) > 0 {
-				m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs) // Previous tab
+				m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 				m.contentChanged = true
 			}
 			m.mu.Unlock()
@@ -97,7 +95,6 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height - verticalMarginHeight
-		// m.viewport.YPosition = headerHeight // Removed as viewport doesn't support YPosition
 
 		m.contentChanged = true
 	case time.Time:
@@ -109,13 +106,13 @@ func (m *LogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle BackMsg if needed
 	}
 
-	// Update viewport content if needed
 	m.mu.Lock()
 	if m.contentChanged && len(m.tabs) > 0 {
 		activeTab := &m.tabs[m.activeTab]
 		activeTab.mu.Lock()
 		content := activeTab.buf.String()
 		activeTab.mu.Unlock()
+
 		m.viewport.SetContent(content)
 		m.contentChanged = false
 	}
@@ -135,20 +132,25 @@ func (m *LogModel) View() string {
 		Foreground(lipgloss.Color("#444")).
 		Render(strings.Repeat("─", m.viewport.Width))
 
-	return fmt.Sprintf("%s\n%s\n%s\n%s", m.headerView(), separator, body, m.footerView())
+	return fmt.Sprintf("%s\n%s\n%s\n%s",
+		m.headerView(),
+		separator,
+		body,
+		m.footerView(),
+	)
 }
 
 func (m *LogModel) headerView() string {
 	title := titleStyle.Render("Application Logs")
 
-	// Render tabs dynamically based on the tab names
-	var tabViews []string
+	// Build tab headers without copying the entire tab (including its mutex)
 	m.mu.Lock()
-	for i, t := range m.tabs {
+	var tabViews []string
+	for i := range m.tabs {
 		if i == m.activeTab {
-			tabViews = append(tabViews, activeTabBorderStyle.Render(t.name))
+			tabViews = append(tabViews, activeTabBorderStyle.Render(m.tabs[i].name))
 		} else {
-			tabViews = append(tabViews, inactiveTabBorderStyle.Render(t.name))
+			tabViews = append(tabViews, inactiveTabBorderStyle.Render(m.tabs[i].name))
 		}
 	}
 	m.mu.Unlock()
@@ -182,28 +184,78 @@ func max(a, b int) int {
 	return b
 }
 
-// Updated AddTab function
+// -----------------------------------------------------------------------------
+// Tab management
+// -----------------------------------------------------------------------------
+
+// AddTab creates a new tab (if not already existing) and returns it's buffer.
 func (m *LogModel) AddTab(name string) *bytes.Buffer {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	buf := new(bytes.Buffer)
-	if !m.isExist(name) {
-		m.tabs = append(m.tabs, tab{name: name, buf: buf})
+	// Check existence first
+	for i := range m.tabs {
+		if m.tabs[i].name == name {
+			return m.tabs[i].buf
+		}
 	}
 
-	// Set activeTab to the first tab if this is the first tab added
+	// Otherwise create a new tab
+	buf := new(bytes.Buffer)
+	m.tabs = append(m.tabs, tab{name: name, buf: buf})
+
+	// If this is the first tab, make it active
 	if len(m.tabs) == 1 {
 		m.activeTab = 0
 	}
-
 	m.contentChanged = true
 	return buf
 }
 
-func (m *LogModel) isExist(name string) bool {
-	for _, t := range m.tabs {
-		if t.name == name {
+// GetTabBufferIfExists returns the *bytes.Buffer for the named tab if it exists,
+// otherwise returns nil and an error. (Avoids copying the tab struct.)
+func (m *LogModel) GetTabBufferIfExists(name string) (*bytes.Buffer, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.tabs {
+		if m.tabs[i].name == name {
+			return m.tabs[i].buf, nil
+		}
+	}
+	return nil, fmt.Errorf("tab %q does not exist", name)
+}
+
+// AppendToTab appends data to a tab by name (if found).
+func (m *LogModel) AppendToTab(name, data string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.tabs {
+		if m.tabs[i].name == name {
+			// Lock only the tab we’re modifying
+			m.tabs[i].mu.Lock()
+			m.tabs[i].buf.WriteString(data)
+			m.tabs[i].mu.Unlock()
+
+			// If the appended tab is active, mark content changed
+			if i == m.activeTab {
+				m.contentChanged = true
+			}
+			break
+		}
+	}
+}
+
+// SetActiveTabByName sets the active tab by name. Returns true if found.
+func (m *LogModel) SetActiveTabByName(name string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i := range m.tabs {
+		if m.tabs[i].name == name {
+			m.activeTab = i
+			m.contentChanged = true
 			return true
 		}
 	}
@@ -214,40 +266,8 @@ func InitialModel() *LogModel {
 	return &LogModel{
 		tabs: []tab{},
 		viewport: viewport.Model{
-			Width:  80, // Initial default width
-			Height: 20, // Initial default height
+			Width:  80, // default width
+			Height: 20, // default height
 		},
 	}
-}
-
-// Append data to a specific tab by name
-func (m *LogModel) AppendToTab(name, data string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for i, t := range m.tabs {
-		if t.name == name {
-			t.mu.Lock()
-			t.buf.WriteString(data)
-			t.mu.Unlock()
-			if i == m.activeTab {
-				m.contentChanged = true
-			}
-			break
-		}
-	}
-}
-
-func (m *LogModel) SetActiveTabByName(name string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for i, t := range m.tabs {
-		if t.name == name {
-			m.activeTab = i
-			m.contentChanged = true
-			return true
-		}
-	}
-	return false
 }

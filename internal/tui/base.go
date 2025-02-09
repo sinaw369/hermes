@@ -164,6 +164,27 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentScreen = ScreenLogs
 		case constant.OptionListShowProject:
 			m.LogWriter.YellowString("Switching to Show project Screen...")
+			if m.fileList == nil {
+				fileList := HermesList.Config{
+					IsDir:            true,
+					StaticList:       nil,
+					InitialPath:      m.cfg.FileDir,
+					Title:            "",
+					Width:            50,
+					Height:           20,
+					ShowStatusBar:    false,
+					FilteringEnabled: true,
+				}
+				existsBuf, err := m.logsScreen.GetTabBufferIfExists("File List Logs")
+				if err != nil {
+					// TODO: handle error Change Screen to log screen
+					return nil, nil
+				}
+				fileListLogger := logWriter.NewLogger(existsBuf, true, false)
+				fileListModel, _ := HermesList.NewModel(fileList, fileListLogger)
+
+				m.fileList = fileListModel
+			}
 			if err := m.fileList.SetPath(m.cfg.FileDir); err != nil {
 				m.LogWriter.ErrorString("Error setting file list path: %v", err)
 			}
@@ -296,6 +317,7 @@ func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedFileListScreen, cmd := m.fileList.Update(msg)
 	m.fileList = updatedFileListScreen.(*HermesList.Model)
 	if m.fileList.Choice != "" {
+		m.LogWriter.InfoString("File selected: %s", m.fileList.Choice)
 	}
 
 	return m, cmd
@@ -345,16 +367,7 @@ func InitialModel(cfg *config.Config) *Model {
 		ShowStatusBar:    false,
 		FilteringEnabled: true,
 	}
-	fileList := HermesList.Config{
-		IsDir:            true,
-		StaticList:       nil,
-		InitialPath:      "",
-		Title:            "",
-		Width:            50,
-		Height:           20,
-		ShowStatusBar:    false,
-		FilteringEnabled: true,
-	}
+
 	// Define the form fields for the Pull Screen.
 	pullFields := []screen.ButtonModel{
 		{
@@ -469,7 +482,6 @@ func InitialModel(cfg *config.Config) *Model {
 	fileListLogger := logWriter.NewLogger(logsScreenModel.AddTab("File List Logs"), true, false)
 	fileListLogger.InfoString("starting file list operations...")
 	optionListModel, _ := HermesList.NewModel(oplist, mainLogger)
-	fileListModel, _ := HermesList.NewModel(fileList, fileListLogger)
 	// Initialize the Pull Screen with its logger.
 	pullScreenModel := screen.NewModel(pullFields, pullLogger)
 	mergeScreenModel := screen.NewModel(mergeRequestFields, autoMergeLogger)
@@ -477,7 +489,7 @@ func InitialModel(cfg *config.Config) *Model {
 	return &Model{
 		currentScreen:      ScreenWelcome,
 		optionList:         optionListModel,
-		fileList:           fileListModel,
+		fileList:           nil, // Will be initialized later with the updates channel.
 		pullScreen:         pullScreenModel,
 		autoMergeReqScreen: mergeScreenModel,
 		progressScreen:     nil, // Will be initialized later with the updates channel.
