@@ -46,7 +46,7 @@ func NewDiffModel(width, height int, repoPath, branchFrom, branchTo string) *Mod
 func (m *Model) fetchDiff() {
 	//cmd := exec.Command("git", "diff", m.branchFrom+"..origin/"+m.branchTo)
 	//git log origin/production..origin/develop --oneline
-	cmd := exec.Command("git", "log", "origin/"+m.branchFrom+"..origin/"+m.branchTo, "--oneline")
+	cmd := exec.Command("git", "log", "--pretty=format:\"%H - %s\"", "origin/"+m.branchFrom+"..origin/"+m.branchTo)
 
 	cmd.Dir = m.repoPath
 	var out bytes.Buffer
@@ -60,12 +60,25 @@ func (m *Model) fetchDiff() {
 	output := strings.TrimSpace(out.String())
 
 	if output == "" {
-		m.content = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render("No differences between " + m.branchFrom + " and " + m.branchTo)
+		m.content = "No differences between " + m.branchFrom + " and " + m.branchTo
 	} else {
 		lines := strings.Split(output, "\n")
-		diffCount := lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render("Number of different commits: " + strconv.Itoa(len(lines)))
-		// Place the commit count at the top
-		m.content = diffCount + "\n\n" + output
+
+		// Generate commit count text
+		diffCount := "Number of different commits: " + strconv.Itoa(len(lines)) + "\n"
+		diffCountStyled := strings.TrimSpace(lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render(diffCount))
+
+		// Format the commits as "1. full_commit_hash commit_msg"
+		var formattedLines []string
+		for i, line := range lines {
+			commitParts := strings.SplitN(line, " - ", 2) // Split commit hash and message using " - "
+			if len(commitParts) > 1 {
+				formattedLines = append(formattedLines, strconv.Itoa(i+1)+". "+commitParts[0]+" "+strings.TrimSpace(commitParts[1]))
+			}
+		}
+
+		// Join commits properly
+		m.content = diffCountStyled + strings.Join(formattedLines, "\n")
 	}
 
 }
