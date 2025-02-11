@@ -1,5 +1,5 @@
-// File: cmd/main.go
-package main
+// File: cmd/app.go
+package app
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 // main is the entry point of the application.
-func main() {
+func Run() {
 	const description = "Hermes"
 	root := &cobra.Command{Short: description}
 

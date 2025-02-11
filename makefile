@@ -2,8 +2,8 @@
 
 # Go parameters
 GO        := go
-APP_NAME  := GitSyncer
-SRC_DIR   := .
+APP_NAME  := Hermes
+SRC_DIR   := ./cmd
 BIN_DIR   := bin
 BUILD_DIR := build
 
