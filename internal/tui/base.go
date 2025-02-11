@@ -14,7 +14,7 @@ import (
 	"github.com/sinaw369/Hermes/internal/form/screen"
 	HermesList "github.com/sinaw369/Hermes/internal/list"
 	"github.com/sinaw369/Hermes/internal/logWriter"
-	"github.com/sinaw369/Hermes/internal/message"
+	HermesMsg "github.com/sinaw369/Hermes/internal/message"
 	"time"
 )
 
@@ -70,7 +70,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case message.BackMsg:
+	case HermesMsg.BackMsg:
 		m.LogWriter.InfoString("Received BackMsg. Handling back navigation.")
 		return m.handleBack()
 
@@ -229,13 +229,13 @@ func (m *Model) updatePullScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		values := m.pullScreen.GetValue()
 
 		// Initialize the GitLab client with the context.
-		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.logsScreen)
+		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.cfg, m.logsScreen)
 		if err != nil {
 			m.LogWriter.RedString("GitClient Initialization Failed: %v", err)
 			m.currentScreen = ScreenLogs
 			m.logsScreen.SetActiveTabByName(constant.LGitClient)
 
-			updatedLogsScreen, logCmd := m.logsScreen.Update(message.BackMsg{})
+			updatedLogsScreen, logCmd := m.logsScreen.Update(HermesMsg.BackMsg{})
 			m.logsScreen = updatedLogsScreen.(*logsScreen.LogModel)
 			m.LogWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
 			return m, logCmd
@@ -274,13 +274,13 @@ func (m *Model) updateAutoMergeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		values := m.autoMergeReqScreen.GetValue()
 
 		// Initialize the GitLab client with the context.
-		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.logsScreen)
+		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.cfg, m.logsScreen)
 		if err != nil {
 			m.LogWriter.RedString("GitClient Initialization Failed: %v", err)
 			m.currentScreen = ScreenLogs
 			m.logsScreen.SetActiveTabByName(constant.LGitClient)
 
-			updatedLogsScreen, logCmd := m.logsScreen.Update(message.BackMsg{})
+			updatedLogsScreen, logCmd := m.logsScreen.Update(HermesMsg.BackMsg{})
 			m.logsScreen = updatedLogsScreen.(*logsScreen.LogModel)
 			m.LogWriter.InfoString("Switched to Logs Screen due to GitClient initialization failure.")
 			return m, logCmd
@@ -325,14 +325,15 @@ func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedFileListScreen, cmd := m.fileList.Update(msg)
 	m.fileList = updatedFileListScreen.(*HermesList.Model)
 
-	switch msg.(type) {
+	switch gitMsg := msg.(type) {
+	case HermesMsg.GitRepoMsg:
+		// Now you can access the Path field:
+		repoPath := gitMsg.Path
 
-	case message.GitRepoMsg:
 		// If diffScreen is not yet initialized, create it.
+		// (Assuming you want to show diff between branches specified in your configuration)
 		if m.diffScreen == nil {
-			// You can decide which branches to diff.
-			// For example, here we use fixed branch names "develop" and "main".
-			m.diffScreen = diffscreen.NewDiffModel(m.width, m.height, "develop", "update-mig")
+			m.diffScreen = diffscreen.NewDiffModel(m.width, m.height, repoPath, m.cfg.DiffBranchFrom, m.cfg.DifBranchTO)
 		}
 		m.currentScreen = ScreenShowDiff
 		return m, cmd
@@ -343,6 +344,14 @@ func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateShowDiffScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedDiff, cmd := m.diffScreen.Update(msg)
 	m.diffScreen = updatedDiff.(*diffscreen.Model)
+	switch msg.(type) {
+	case HermesMsg.BackToFolderMsg:
+
+		m.fileList.SetPath(m.fileList.CurrentPath)
+		m.currentScreen = ScreenShowFile
+		return m, cmd
+	}
+
 	return m, cmd
 }
 
@@ -367,6 +376,9 @@ func (m *Model) View() string {
 		return m.fileList.View()
 	case ScreenLogs:
 		return m.logsScreen.View()
+	case ScreenShowDiff:
+		return m.diffScreen.View()
+
 	default:
 		return "Unknown Screen"
 	}

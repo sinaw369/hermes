@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	HermesMsg "github.com/sinaw369/Hermes/internal/message"
 	"os/exec"
 	"strings"
 	"time"
@@ -17,20 +18,23 @@ type Model struct {
 	branchFrom string
 	branchTo   string
 	content    string
+	repoPath   string
 	width      int
 	height     int
 	err        error
 }
 
 // NewDiffModel creates a new diff view.
-func NewDiffModel(width, height int, branchFrom, branchTo string) *Model {
+func NewDiffModel(width, height int, repoPath, branchFrom, branchTo string) *Model {
 	vp := viewport.New(width, height-3) // reserve some space for header
 	model := Model{
 		viewport:   vp,
 		branchFrom: branchFrom,
 		branchTo:   branchTo,
+		repoPath:   repoPath,
 		width:      width,
 		height:     height,
+		err:        nil,
 	}
 	model.fetchDiff() // populate diffContent
 	model.viewport.SetContent(model.content)
@@ -38,8 +42,9 @@ func NewDiffModel(width, height int, branchFrom, branchTo string) *Model {
 }
 
 // fetchDiff runs "git diff branchFrom.branchTo" and stores the output.
-func (m Model) fetchDiff() {
-	cmd := exec.Command("git", "diff", m.branchFrom+".."+m.branchTo)
+func (m *Model) fetchDiff() {
+	cmd := exec.Command("git", "diff", m.branchFrom+"..origin/"+m.branchTo)
+	cmd.Dir = m.repoPath
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
@@ -70,7 +75,7 @@ func colorizeDiff(diff string) string {
 }
 
 // Init implements tea.Model.
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	// Use a tick to update the view if needed.
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
@@ -80,7 +85,7 @@ func (m Model) Init() tea.Cmd {
 type tickMsg time.Time
 
 // Update handles key events for scrolling.
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -93,6 +98,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.ViewUp()
 		case "pgdown":
 			m.viewport.ViewDown()
+		case "backspace":
+			return m, func() tea.Msg { return HermesMsg.BackToFolderMsg{} }
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -107,10 +114,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the diff screen.
-func (m Model) View() string {
+func (m *Model) View() string {
 	header := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FF06B7")).
-		Render(fmt.Sprintf("Diff: %s..%s (press q to quit)", m.branchFrom, m.branchTo))
+		Render(fmt.Sprintf("Diff: %s..%s (press q to quit,backspace to folder list)", m.branchFrom, m.branchTo))
 	return fmt.Sprintf("%s\n%s", header, m.viewport.View())
 }

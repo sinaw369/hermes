@@ -4,6 +4,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"github.com/sinaw369/Hermes/internal/config"
 	"github.com/sinaw369/Hermes/internal/constant"
 	"github.com/sinaw369/Hermes/internal/form/logsScreen"
 	"github.com/sinaw369/Hermes/internal/form/progressScreen"
@@ -29,12 +30,13 @@ func NewTUIGitClient(
 	ctx context.Context,
 	updatesChan chan<- progressScreen.PackageUpdate,
 	contextMap map[string]string,
+	cfg *config.Config,
 	logsModel *logsScreen.LogModel,
 ) (*GitlabClient, error) {
 
 	// We rely on TUI logs for output
 	// Optionally store ctx for cancellation/timeouts
-	return newGitlabClient(ctx, updatesChan, contextMap, logsModel)
+	return newGitlabClient(ctx, updatesChan, contextMap, cfg, logsModel)
 }
 
 // NewCLIGitClient is for CLI usage: no TUI logs, no progress channel.
@@ -42,8 +44,9 @@ func NewTUIGitClient(
 func NewCLIGitClient(
 	ctx context.Context,
 	contextMap map[string]string,
+	cfg *config.Config,
 ) (*GitlabClient, error) {
-	return newGitlabClient(ctx, nil, contextMap, nil)
+	return newGitlabClient(ctx, nil, contextMap, cfg, nil)
 }
 
 // newGitlabClient is the common internal constructor that reads GITLAB_TOKEN, etc.
@@ -51,12 +54,13 @@ func newGitlabClient(
 	ctx context.Context,
 	updatesChan chan<- progressScreen.PackageUpdate,
 	contextMap map[string]string,
+	cfg *config.Config,
 	logsModel *logsScreen.LogModel,
 ) (*GitlabClient, error) {
 
 	// Fetch the GitLab token and URL from environment variables
-	gitlabToken := os.Getenv("GITLAB_TOKEN")
-	gitlabURL := os.Getenv("GITLAB_BASE_URL")
+	gitlabToken := cfg.GitlabToken
+	gitlabURL := cfg.GitlabBaseURL
 
 	if gitlabToken == "" || gitlabURL == "" {
 		return nil, fmt.Errorf("error: GITLAB_TOKEN or GITLAB_BASE_URL is not set in environment")

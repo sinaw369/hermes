@@ -19,11 +19,13 @@ func Load() (config *Config, err error) {
 	}
 
 	return &Config{
-		GitlabBaseURL: loadString("GITLAB_BASE_URL"),
-		GitlabToken:   loadString("GITLAB_TOKEN"),
-		SyncDir:       loadString("SYNC_DIR"),
-		FileDir:       loadString("FILES_DIR"),
-		SyncInterval:  LoadDuration("SYNC_INTERVAL"),
+		GitlabBaseURL:  loadString("GITLAB_BASE_URL"),
+		GitlabToken:    loadString("GITLAB_TOKEN"),
+		SyncDir:        loadString("SYNC_DIR"),
+		FileDir:        loadString("FILES_DIR"),
+		DiffBranchFrom: loadString("DIFF_BRANCH_FROM"),
+		DifBranchTO:    loadString("DIFF_BRANCH_TO"),
+		SyncInterval:   LoadDuration("SYNC_INTERVAL"),
 	}, nil
 
 }

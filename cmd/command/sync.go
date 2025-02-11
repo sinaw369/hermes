@@ -43,13 +43,13 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 				// We do NOT block the terminal — run sync in the background and return.
 				sc.contextValues[constant.DetachMode] = "YES"
 				fmt.Printf("Syncing in dettached mode. Press Ctrl+C to stop.\nDir=%s Interval=%s\n", syncDir, syncInterval)
-				go sc.syncProjects(syncDir, syncInterval)
+				go sc.syncProjects(syncDir, syncInterval, cfg)
 				select {}
 			} else {
 				// We block in this function, showing logs or any needed output.
 				sc.contextValues[constant.DetachMode] = "NO"
 				fmt.Printf("Syncing in attached mode. Press Ctrl+C to stop.\nDir=%s Interval=%s\n", syncDir, syncInterval)
-				sc.syncProjects(syncDir, syncInterval) // blocks
+				sc.syncProjects(syncDir, syncInterval, cfg) // blocks
 			}
 		},
 	}
@@ -61,11 +61,11 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 }
 
 // syncProjects is your actual sync logic.
-func (sc *SyncCmd) syncProjects(syncDir, interval string) {
+func (sc *SyncCmd) syncProjects(syncDir, interval string, cfg *config.Config) {
 	// Example infinite loop to show that attached mode blocks
 	ticker := time.NewTicker(parseInterval(interval))
 	defer ticker.Stop()
-	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues)
+	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues, cfg)
 	if err != nil {
 		return
 	}
