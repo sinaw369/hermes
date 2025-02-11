@@ -117,6 +117,7 @@ Loop:
 				m.logWriter.InfoString("updatesChan closed. Marking processing as done.")
 				m.progress.SetPercent(1.0)
 				m.done = true
+				m.index = 0
 				break Loop // Exit the loop to prevent infinite cycling
 			}
 
@@ -124,7 +125,7 @@ Loop:
 			m.logWriter.InfoString("Processing package: %s (Status: %v)", update.PackageName, update.Status)
 			m.processPackageUpdate(update)
 			m.totalPkg = update.TotalPkg
-			m.index = update.Index
+			m.index++
 
 			// Calculate the new target percentage.
 			if m.totalPkg > 0 {
@@ -132,7 +133,6 @@ Loop:
 				m.logWriter.InfoString("Progress set to %.2f%%", float64(m.index+1)/float64(m.totalPkg)*100)
 			} else {
 				m.progress.SetPercent(0.0)
-				m.logWriter.RedString("2->", float64(m.index+1)/float64(m.totalPkg))
 				m.logWriter.InfoString("Total packages is zero. Progress set to 0%%")
 			}
 
