@@ -43,7 +43,10 @@ func NewDiffModel(width, height int, repoPath, branchFrom, branchTo string) *Mod
 
 // fetchDiff runs "git diff branchFrom.branchTo" and stores the output.
 func (m *Model) fetchDiff() {
-	cmd := exec.Command("git", "diff", m.branchFrom+"..origin/"+m.branchTo)
+	//cmd := exec.Command("git", "diff", m.branchFrom+"..origin/"+m.branchTo)
+	//git log origin/production..origin/develop --oneline
+	cmd := exec.Command("git", "log", "origin/"+m.branchFrom+"..origin/"+m.branchTo, "--oneline")
+
 	cmd.Dir = m.repoPath
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -54,7 +57,12 @@ func (m *Model) fetchDiff() {
 		return
 	}
 	// Optionally, you can add color by processing the diff output.
-	m.content = colorizeDiff(out.String())
+	if out.String() == "" {
+		m.content = "no diff between" + m.branchFrom + " and " + m.branchTo
+	} else {
+		m.content = colorizeDiff(out.String())
+	}
+
 }
 
 // colorizeDiff applies basic colorization to a diff string.
