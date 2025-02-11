@@ -12,20 +12,20 @@ import (
 )
 
 // DiffModel displays a unified diff between two branches.
-type DiffModel struct {
-	viewport    viewport.Model
-	branchFrom  string
-	branchTo    string
-	diffContent string
-	width       int
-	height      int
-	err         error
+type Model struct {
+	viewport   viewport.Model
+	branchFrom string
+	branchTo   string
+	content    string
+	width      int
+	height     int
+	err        error
 }
 
 // NewDiffModel creates a new diff view.
-func NewDiffModel(width, height int, branchFrom, branchTo string) *DiffModel {
+func NewDiffModel(width, height int, branchFrom, branchTo string) *Model {
 	vp := viewport.New(width, height-3) // reserve some space for header
-	model := DiffModel{
+	model := Model{
 		viewport:   vp,
 		branchFrom: branchFrom,
 		branchTo:   branchTo,
@@ -33,23 +33,23 @@ func NewDiffModel(width, height int, branchFrom, branchTo string) *DiffModel {
 		height:     height,
 	}
 	model.fetchDiff() // populate diffContent
-	model.viewport.SetContent(model.diffContent)
+	model.viewport.SetContent(model.content)
 	return &model
 }
 
 // fetchDiff runs "git diff branchFrom.branchTo" and stores the output.
-func (m DiffModel) fetchDiff() {
+func (m Model) fetchDiff() {
 	cmd := exec.Command("git", "diff", m.branchFrom+".."+m.branchTo)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
 		m.err = fmt.Errorf("error running git diff: %v", err)
-		m.diffContent = m.err.Error()
+		m.content = m.err.Error()
 		return
 	}
 	// Optionally, you can add color by processing the diff output.
-	m.diffContent = colorizeDiff(out.String())
+	m.content = colorizeDiff(out.String())
 }
 
 // colorizeDiff applies basic colorization to a diff string.
@@ -70,7 +70,7 @@ func colorizeDiff(diff string) string {
 }
 
 // Init implements tea.Model.
-func (m DiffModel) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	// Use a tick to update the view if needed.
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
@@ -80,7 +80,7 @@ func (m DiffModel) Init() tea.Cmd {
 type tickMsg time.Time
 
 // Update handles key events for scrolling.
-func (m DiffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -107,7 +107,7 @@ func (m DiffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the diff screen.
-func (m DiffModel) View() string {
+func (m Model) View() string {
 	header := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FF06B7")).

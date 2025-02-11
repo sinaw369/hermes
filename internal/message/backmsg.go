@@ -4,6 +4,7 @@ package message
 type BackMsg struct{}
 
 // GitRepoMsg signals that a Git repository folder was selected.
+
 type GitRepoMsg struct {
 	Path string
 }

@@ -275,6 +275,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !ok {
 					return m, nil
 				}
+				// Calculate the full (absolute) path.
+				// If selected.Path is not absolute, join it with the current path.
+				var fullPath string
+				if filepath.IsAbs(selected.Path) {
+					fullPath = selected.Path
+				} else {
+					// Here, m.CurrentPath is already an absolute path based on your env FILES_DIR.
+					fullPath = filepath.Join(m.CurrentPath, selected.Name)
+				}
+
+				// Check if the selected folder is a Git repository.
+				// (i.e. a .git folder exists inside fullPath)
+
+				gitPath := filepath.Join(fullPath, ".git")
+				if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+					m.logWriter.InfoString("Git repository found at: %s", fullPath)
+					// Return a command message so your higher-level TUI can change screens.
+					return m, func() tea.Msg { return message.GitRepoMsg{Path: fullPath} }
+				} else if err != nil && !os.IsNotExist(err) {
+					m.logWriter.ErrorString("Error checking Git repository for %s: %v", fullPath, err)
+					return m, nil
+				}
 				if selected.IsDir {
 					if err := m.SetPath(selected.Path); err != nil {
 						// Optionally handle the error (for example, by showing an error message).
@@ -313,4 +335,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the UI.
 func (m *Model) View() string {
 	return "\n" + m.List.View()
+}
+func isGitRepo(path string) (bool, error) {
+	gitDir := filepath.Join(path, ".git")
+	info, err := os.Stat(gitDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/sinaw369/Hermes/internal/client"
 	"github.com/sinaw369/Hermes/internal/config"
 	"github.com/sinaw369/Hermes/internal/constant"
+	"github.com/sinaw369/Hermes/internal/form/diffscreen"
 	"github.com/sinaw369/Hermes/internal/form/logsScreen"
 	"github.com/sinaw369/Hermes/internal/form/progressScreen"
 	"github.com/sinaw369/Hermes/internal/form/screen"
@@ -28,6 +29,8 @@ const (
 	ScreenLogs
 	ScreenAutoMergeReq
 	ScreenShowFile
+	ScreenShowDiff
+
 	ScreenQuit
 )
 
@@ -50,6 +53,7 @@ type Model struct {
 	width              int // Window width
 	height             int // Window height
 	cfg                *config.Config
+	diffScreen         *diffscreen.Model
 }
 
 // Init initializes the application; no initial command is needed.
@@ -93,6 +97,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateLogsScreen(msg)
 		case ScreenShowFile:
 			return m.updateShowFileScreen(msg)
+		case ScreenShowDiff:
+			return m.updateShowDiffScreen(msg)
 		}
 	}
 
@@ -122,6 +128,8 @@ func (m *Model) handleBack() (tea.Model, tea.Cmd) {
 		m.currentScreen = ScreenWelcome
 	case ScreenPull, ScreenLogs, ScreenProgress, ScreenAutoMergeReq, ScreenShowFile:
 		m.currentScreen = ScreenList
+	case ScreenShowDiff:
+		m.currentScreen = ScreenShowFile
 	default:
 		m.currentScreen = ScreenWelcome
 	}
@@ -316,10 +324,25 @@ func (m *Model) updateLogsScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedFileListScreen, cmd := m.fileList.Update(msg)
 	m.fileList = updatedFileListScreen.(*HermesList.Model)
-	if m.fileList.Choice != "" {
-		m.LogWriter.InfoString("File selected: %s", m.fileList.Choice)
+
+	switch msg.(type) {
+
+	case message.GitRepoMsg:
+		// If diffScreen is not yet initialized, create it.
+		if m.diffScreen == nil {
+			// You can decide which branches to diff.
+			// For example, here we use fixed branch names "develop" and "main".
+			m.diffScreen = diffscreen.NewDiffModel(m.width, m.height, "develop", "update-mig")
+		}
+		m.currentScreen = ScreenShowDiff
+		return m, cmd
 	}
 
+	return m, cmd
+}
+func (m *Model) updateShowDiffScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updatedDiff, cmd := m.diffScreen.Update(msg)
+	m.diffScreen = updatedDiff.(*diffscreen.Model)
 	return m, cmd
 }
 
