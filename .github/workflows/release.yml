@@ -4,9 +4,10 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
-  contents: write  # Grant write permission to contents (for creating releases)
+  contents: write
 
 jobs:
   build-and-release:
