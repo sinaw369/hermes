@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sinaw369/Hermes/internal/color"
 	HermesMsg "github.com/sinaw369/Hermes/internal/message"
 	"os/exec"
 	"strconv"
@@ -46,41 +47,61 @@ func NewDiffModel(width, height int, repoPath, branchFrom, branchTo string) *Mod
 func (m *Model) fetchDiff() {
 	//cmd := exec.Command("git", "diff", m.branchFrom+"..origin/"+m.branchTo)
 	//git log origin/production..origin/develop --oneline
-	cmd := exec.Command("git", "log", "--pretty=format:\"%H - %s\"", "origin/"+m.branchFrom+"..origin/"+m.branchTo)
-
+	cmd := exec.Command("git", "log", "--pretty=format:%H - %s - %ai - %ar", "origin/"+m.branchFrom+"..origin/"+m.branchTo)
 	cmd.Dir = m.repoPath
+
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
-		m.err = fmt.Errorf("error running git diff: %v", err)
+		m.err = fmt.Errorf("error running git log: %v", err)
 		m.content = m.err.Error()
 		return
 	}
+
 	output := strings.TrimSpace(out.String())
 
 	if output == "" {
 		m.content = "No differences between " + m.branchFrom + " and " + m.branchTo
-	} else {
-		lines := strings.Split(output, "\n")
-
-		// Generate commit count text
-		diffCount := "Number of different commits: " + strconv.Itoa(len(lines)) + "\n"
-		diffCountStyled := strings.TrimSpace(lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render(diffCount))
-
-		// Format the commits as "1. full_commit_hash commit_msg"
-		var formattedLines []string
-		for i, line := range lines {
-			commitParts := strings.SplitN(line, " - ", 2) // Split commit hash and message using " - "
-			if len(commitParts) > 1 {
-				formattedLines = append(formattedLines, strconv.Itoa(i+1)+". "+commitParts[0]+" "+strings.TrimSpace(commitParts[1]))
-			}
-		}
-
-		// Join commits properly
-		m.content = diffCountStyled + strings.Join(formattedLines, "\n")
+		return
 	}
 
+	lines := strings.Split(output, "\n")
+
+	// Define styles
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color.NewColors().NeonMagenta.Hex))
+
+	// Generate commit count header
+	diffCount := strings.TrimSpace(headerStyle.Render("Number of different commits: " + strconv.Itoa(len(lines)) + "\n"))
+
+	// Format commits as "1. full_commit_hash - commit_msg - YYYY-MM-DD - relative_time"
+	var formattedLines []string
+	separator := separatorStyle.Render(" - ")
+
+	for i, line := range lines {
+		commitParts := strings.SplitN(line, " - ", 4) // Ensure correct splitting
+		if len(commitParts) < 4 {
+			continue // Skip if not properly formatted
+		}
+
+		commitHash := commitParts[0]
+		commitMessage := strings.TrimSpace(commitParts[1])
+		fullDate := strings.TrimSpace(commitParts[2])
+		commitRelativeTime := strings.TrimSpace(commitParts[3])
+
+		// Extract only the date (YYYY-MM-DD) from the full timestamp
+		dateOnly := strings.Split(fullDate, " ")[0]
+
+		// Format the commit line properly
+		formattedCommit := fmt.Sprintf("%d. %s%s%s%s%s%s%s",
+			i+1, commitHash, separator, commitMessage, separator, dateOnly, separator, commitRelativeTime)
+
+		formattedLines = append(formattedLines, formattedCommit)
+	}
+
+	// Join formatted commits and store in m.content
+	m.content = diffCount + strings.Join(formattedLines, "\n")
 }
 
 // colorizeDiff applies basic colorization to a diff string.

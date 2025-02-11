@@ -308,7 +308,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.logWriter.InfoString("Opening file: %s", selected.Path)
 				}
 
-			case "backspace":
+			case tea.KeyBackspace.String():
 				// Navigate up one directory level.
 				parent := filepath.Dir(m.CurrentPath)
 				if err := m.SetPath(parent); err != nil {
