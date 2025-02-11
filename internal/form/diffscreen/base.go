@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	HermesMsg "github.com/sinaw369/Hermes/internal/message"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -56,11 +57,15 @@ func (m *Model) fetchDiff() {
 		m.content = m.err.Error()
 		return
 	}
-	// Optionally, you can add color by processing the diff output.
-	if out.String() == "" {
-		m.content = "no diff between" + m.branchFrom + " and " + m.branchTo
+	output := strings.TrimSpace(out.String())
+
+	if output == "" {
+		m.content = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render("No differences between " + m.branchFrom + " and " + m.branchTo)
 	} else {
-		m.content = colorizeDiff(out.String())
+		lines := strings.Split(output, "\n")
+		diffCount := lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render("Number of different commits: " + strconv.Itoa(len(lines)))
+		// Place the commit count at the top
+		m.content = diffCount + "\n\n" + output
 	}
 
 }
