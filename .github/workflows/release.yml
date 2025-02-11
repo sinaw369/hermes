@@ -22,27 +22,52 @@ jobs:
 
       - name: Build binaries
         run: |
+          mkdir -p bin
           go mod tidy
-          GOOS=linux GOARCH=amd64 go build -o bin/myapp-linux-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -o bin/myapp-darwin-arm64 .
-          GOOS=windows GOARCH=amd64 go build -o bin/myapp-windows-amd64.exe .
+          # Build for Linux (amd64)
+          GOOS=linux GOARCH=amd64 go build -o bin/hermes-linux-amd64 .
+          # Build for macOS (arm64)
+          GOOS=darwin GOARCH=arm64 go build -o bin/hermes-darwin-arm64 .
+          # Build for Windows (amd64)
+          GOOS=windows GOARCH=amd64 go build -o bin/hermes-windows-amd64.exe .
 
       - name: Create Release
+        id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
           release_name: ${{ github.ref_name }}
           draft: false
           prerelease: false
 
-      - name: Upload Release Assets
+      - name: Upload Hermes Linux Binary
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./bin/*
-          asset_name: ${{ github.ref_name }}-${{ runner.os }}-binary
-          asset_content_type: ''
+          asset_path: ./bin/hermes-linux-amd64
+          asset_name: hermes-linux-amd64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Hermes Darwin Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./bin/hermes-darwin-arm64
+          asset_name: hermes-darwin-arm64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Hermes Windows Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./bin/hermes-windows-amd64.exe
+          asset_name: hermes-windows-amd64.exe
+          asset_content_type: application/octet-stream
