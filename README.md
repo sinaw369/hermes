@@ -18,7 +18,14 @@ Inspired by the Greek god Hermes, the swift messenger of the gods, this tool str
 - **Merge Requests**: Creates branches, runs custom commands, commits, pushes, and creates merge requests.
 - **Interactive Logs & Progress**: Real-time updates in a terminal UI.
 - **Configurable**: Supports flexible include/exclude patterns and other settings.
-
+## Installation
+```bash
+go install github.com/sinaw369/hermes@latest
+```
+### Notes
+This command downloads the latest version of Hermes, builds it,
+and installs the binary into your Go bin directory (typically `$GOPATH/bin` or `$HOME/go/bin`).
+Make sure that your Go bin directory is in your system's PATH so you can run the hermes command from anywhere.
 ## Usage
 
 create ```.env``` file
