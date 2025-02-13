@@ -9,17 +9,18 @@ import (
 	"github.com/sinaw369/Hermes/internal/constant"
 	"github.com/spf13/cobra"
 	"log"
+	"path/filepath"
 	"time"
 )
 
 type SyncCmd struct {
-	detach        bool
+	silentMode    bool
 	contextValues map[string]string
 }
 
 func NewSyncCmd() *SyncCmd {
 	return &SyncCmd{
-		detach:        false,
+		silentMode:    false,
 		contextValues: make(map[string]string),
 	}
 }
@@ -32,58 +33,55 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 			// Retrieve flag values or read from viper/env if not provided.
 			syncDir, _ := cmd.Flags().GetString("dir")
 			if syncDir == "" {
-				syncDir = cfg.SyncDir
+				syncDir = cfg.FileDir
 			}
-			syncInterval, _ := cmd.Flags().GetString("interval")
+			if !filepath.IsAbs(syncDir) {
+				log.Println("dir should be full path:", syncDir)
+				return
+			}
 			sc.contextValues[constant.TargetDir] = syncDir
-			sc.contextValues[constant.SyncInterval] = syncInterval
+			sc.contextValues[constant.ContextValueInclude], _ = cmd.Flags().GetString("include")
+			sc.contextValues[constant.ContextValueExclude], _ = cmd.Flags().GetString("exclude")
+			pullBranch, _ := cmd.Flags().GetString("pullBranch")
+			if pullBranch != "" {
+				sc.contextValues[constant.ContextValuePullDefault] = constant.ContextValueYES
+				sc.contextValues[constant.ContextValuePullBranch] = pullBranch
+			}
 			// Check if the user wants to detach
-			if sc.detach {
+			if sc.silentMode {
 				// DETACHED mode (like `docker run -d`).
-				// We do NOT block the terminal — run sync in the background and return.
-				sc.contextValues[constant.DetachMode] = "YES"
-				fmt.Printf("Syncing in dettached mode. Press Ctrl+C to stop.\nDir=%s Interval=%s\n", syncDir, syncInterval)
-				go sc.syncProjects(syncDir, syncInterval, cfg)
-				select {}
+				sc.contextValues[constant.SilentMode] = "YES"
+				fmt.Printf("Syncing in SilentMode mode. Press Ctrl+C to stop.\nDir=%s\n", syncDir)
+				sc.syncProjects(syncDir, cfg)
 			} else {
 				// We block in this function, showing logs or any needed output.
-				sc.contextValues[constant.DetachMode] = "NO"
-				fmt.Printf("Syncing in attached mode. Press Ctrl+C to stop.\nDir=%s Interval=%s\n", syncDir, syncInterval)
-				sc.syncProjects(syncDir, syncInterval, cfg) // blocks
+				sc.contextValues[constant.SilentMode] = "NO"
+				log.Printf("Syncing projects in %s...\n", syncDir)
+				start := time.Now()
+				sc.syncProjects(syncDir, cfg)
+				elapsed := time.Since(start)
+				log.Printf("Syncing projects in %s...\ndone\nelapsedtime:%v", syncDir, elapsed)
 			}
 		},
 	}
-	cmd.Flags().BoolVarP(&sc.detach, "detach", "d", false, "Run in detached mode (like Docker’s -d)")
-	cmd.Flags().String("dir", "", "Directory to sync projects")
-	cmd.Flags().String("interval", "", "Sync interval")
+	cmd.Flags().BoolVarP(&sc.silentMode, "silent", "", false, "Run in detached mode (like Docker’s -d)")
+	cmd.Flags().String("dir", "", "Directory to sync projects and should be full path")
+	cmd.Flags().String("include", "", "include project with patterns (comma-separated)")
+	cmd.Flags().String("exclude", "", "exclude project with patterns (comma-separated)")
+	cmd.Flags().String("pullBranch", "", "the target branch witch you want to just pull it")
 
 	return cmd
 }
 
 // syncProjects is your actual sync logic.
-func (sc *SyncCmd) syncProjects(syncDir, interval string, cfg *config.Config) {
-	// Example infinite loop to show that attached mode blocks
-	ticker := time.NewTicker(parseInterval(interval))
-	defer ticker.Stop()
+func (sc *SyncCmd) syncProjects(syncDir string, cfg *config.Config) {
 	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues, cfg)
 	if err != nil {
 		return
 	}
-	log.Printf("Syncing projects in %s...\n", syncDir)
+
 	gitClient.InitPullRequestAutomationCLI(&syncDir)
-	log.Printf("Syncing projects in %s...\n done", syncDir)
 
-	for {
-		select {
-		case <-ticker.C:
-			log.Printf("Syncing projects in %s...\n", syncDir)
-
-			gitClient.InitPullRequestAutomationCLI(&syncDir)
-			// Insert actual sync logic here
-			log.Printf("Syncing projects in %s...\n done", syncDir)
-		}
-		// On attached mode, we keep printing logs. On detached, it’s silent in background.
-	}
 }
 
 // parseInterval is a helper to parse a duration string into time.Duration.
