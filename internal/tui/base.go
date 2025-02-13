@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sinaw369/Hermes/internal/client"
@@ -116,6 +117,16 @@ func (m *Model) updateCurrentScreenSize(msg tea.WindowSizeMsg) (tea.Model, tea.C
 		updatedProgressScreen, cmd := m.progressScreen.Update(msg)
 		m.progressScreen = updatedProgressScreen.(*progressScreen.Model)
 		return m, cmd
+	case ScreenList:
+		if m.fileList != nil {
+			// Update the list's size to match the new terminal dimensions.
+			m.fileList.List.SetSize(msg.Width, msg.Height)
+			// Optionally adjust the pagination style (this centers the pagination, adjust as needed).
+			newPaginationStyle := list.DefaultStyles().PaginationStyle.
+				PaddingLeft((msg.Width - 40) / 2)
+			m.fileList.List.Styles.PaginationStyle = newPaginationStyle
+		}
+		return m, nil
 	default:
 		return m, nil
 	}
@@ -178,8 +189,8 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 					StaticList:       nil,
 					InitialPath:      m.cfg.FileDir,
 					Title:            "",
-					Width:            50,
-					Height:           20,
+					Width:            m.width,
+					Height:           m.height,
 					ShowStatusBar:    false,
 					FilteringEnabled: true,
 				}
@@ -190,8 +201,11 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				fileListLogger := logWriter.NewLogger(existsBuf, true, false)
 				fileListModel, _ := HermesList.NewModel(fileList, fileListLogger)
-
+				// TODO : check err will be panic
 				m.fileList = fileListModel
+			} else {
+				// If the file list model already exists, update its size with the current terminal dimensions.
+				m.fileList.List.SetSize(m.width, m.height)
 			}
 			if err := m.fileList.SetPath(m.cfg.FileDir); err != nil {
 				m.LogWriter.ErrorString("Error setting file list path: %v", err)
@@ -334,6 +348,8 @@ func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// (Assuming you want to show diff between branches specified in your configuration)
 		if m.diffScreen == nil {
 			m.diffScreen = diffscreen.NewDiffModel(m.width, m.height, repoPath, m.cfg.DiffBranchFrom, m.cfg.DifBranchTO)
+		} else {
+			m.diffScreen.UpdateFetch(repoPath)
 		}
 		m.currentScreen = ScreenShowDiff
 		return m, cmd
@@ -406,19 +422,13 @@ func InitialModel(cfg *config.Config) *Model {
 	// Define the form fields for the Pull Screen.
 	pullFields := []screen.ButtonModel{
 		{
-			Label:       constant.PullFieldInclude,
+			Label:       constant.ContextValueInclude,
 			PlaceHolder: "Include patterns (comma-separated)",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       "SSH URL Include",
-			PlaceHolder: "Can be author name",
-			Width:       50,
-			Validate:    func(s string) error { return nil },
-		},
-		{
-			Label:       constant.PullFieldExclude,
+			Label:       constant.ContextValueExclude,
 			PlaceHolder: "Exclude patterns",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
@@ -439,19 +449,19 @@ func InitialModel(cfg *config.Config) *Model {
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constant.MergeFieldInclude,
+			Label:       constant.ContextValueInclude,
 			PlaceHolder: "Include patterns (comma-separated)",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constant.MergeFieldExclude,
+			Label:       constant.ContextValueExclude,
 			PlaceHolder: "Exclude patterns",
 			Width:       50,
 			Validate:    func(s string) error { return nil },
 		},
 		{
-			Label:       constant.MergeFieldPath,
+			Label:       constant.ContextValueDir,
 			PlaceHolder: "project path",
 			Width:       50,
 			Validate:    func(s string) error { return nil },

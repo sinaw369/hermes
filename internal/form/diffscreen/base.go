@@ -42,6 +42,11 @@ func NewDiffModel(width, height int, repoPath, branchFrom, branchTo string) *Mod
 	model.viewport.SetContent(model.content)
 	return &model
 }
+func (m *Model) UpdateFetch(repoPath string) {
+	m.repoPath = repoPath
+	m.fetchDiff() // populate diffContent
+	m.viewport.SetContent(m.content)
+}
 
 // fetchDiff runs "git diff branchFrom.branchTo" and stores the output.
 func (m *Model) fetchDiff() {
@@ -77,7 +82,7 @@ func (m *Model) fetchDiff() {
 
 	// Format commits as "1. full_commit_hash - commit_msg - YYYY-MM-DD - relative_time"
 	var formattedLines []string
-	separator := separatorStyle.Render(" - ")
+	separator := separatorStyle.Render(" , ")
 
 	for i, line := range lines {
 		commitParts := strings.SplitN(line, " - ", 4) // Ensure correct splitting
@@ -85,17 +90,17 @@ func (m *Model) fetchDiff() {
 			continue // Skip if not properly formatted
 		}
 
-		commitHash := commitParts[0]
+		//commitHash := commitParts[0]
 		commitMessage := strings.TrimSpace(commitParts[1])
 		fullDate := strings.TrimSpace(commitParts[2])
-		commitRelativeTime := strings.TrimSpace(commitParts[3])
+		// commitRelativeTime := strings.TrimSpace(commitParts[3])
 
 		// Extract only the date (YYYY-MM-DD) from the full timestamp
-		dateOnly := strings.Split(fullDate, " ")[0]
+		//dateOnly := strings.Split(fullDate, " ")[0]
 
 		// Format the commit line properly
-		formattedCommit := fmt.Sprintf("%d. %s%s%s%s%s%s%s",
-			i+1, commitHash, separator, commitMessage, separator, dateOnly, separator, commitRelativeTime)
+		formattedCommit := fmt.Sprintf("%d. %s%s%s%s",
+			i+1, commitMessage, separator, fullDate, separator)
 
 		formattedLines = append(formattedLines, formattedCommit)
 	}
