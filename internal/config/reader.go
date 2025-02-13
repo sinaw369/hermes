@@ -10,7 +10,7 @@ func Load() (config *Config, err error) {
 	viper.SetConfigType("env")
 	viper.AddConfigPath(".")
 	viper.SetConfigName(".env")
-	viper.AllowEmptyEnv(true)
+	viper.AllowEmptyEnv(false)
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err != nil {
 		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
@@ -21,11 +21,9 @@ func Load() (config *Config, err error) {
 	return &Config{
 		GitlabBaseURL:  loadString("GITLAB_BASE_URL"),
 		GitlabToken:    loadString("GITLAB_TOKEN"),
-		SyncDir:        loadString("SYNC_DIR"),
-		FileDir:        loadString("FILES_DIR"),
+		FileDir:        loadFilePath("FILES_DIR"),
 		DiffBranchFrom: loadString("DIFF_BRANCH_FROM"),
 		DifBranchTO:    loadString("DIFF_BRANCH_TO"),
-		SyncInterval:   LoadDuration("SYNC_INTERVAL"),
 	}, nil
 
 }
