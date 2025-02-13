@@ -3,8 +3,10 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"github.com/sinaw369/Hermes/internal/constant"
 	"github.com/sinaw369/Hermes/internal/logWriter"
 	"gitlab.com/gitlab-org/api/client-go"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"net/url"
 	"os"
@@ -12,15 +14,20 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
-// Helper function to execute shell commands
+// runCommand executes a shell command in the specified directory and logs its output.
+// It uses a context to allow cancellation/timeouts and errgroup to run stdout and stderr reading concurrently.
 func runCommand(logger *logWriter.Logger, dir, command string, args ...string) error {
+	// Create the command with context support.
 	cmd := exec.Command(command, args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
+
+	logger.BlueString("Running command: %s args: %v", command, args)
+
+	// Obtain pipes for stdout and stderr.
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		logger.ErrorString("Error obtaining StdoutPipe: %v", err)
@@ -32,62 +39,77 @@ func runCommand(logger *logWriter.Logger, dir, command string, args ...string) e
 		return err
 	}
 
-	logger.BlueString("Running command: %s args: %v", command, args)
-
+	// Start the command.
 	if err := cmd.Start(); err != nil {
 		logger.ErrorString("Error starting command: %v", err)
 		return err
 	}
 
-	// Use WaitGroup to wait for both stdout and stderr to be processed
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// Use errgroup to concurrently read from stdout and stderr.
+	var g errgroup.Group
 
-	// Function to read from a pipe and send logs
-	readPipe := func(pipe io.ReadCloser, prefix string) {
-		defer wg.Done()
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			line := scanner.Text()
-			switch prefix {
-			case "STDOUT":
-				logger.InfoString(line)
-			case "STDERR":
-				logger.RedString(line) // Treat stderr as errors
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			logger.ErrorString("Error reading %s: %v", prefix, err)
-		}
+	g.Go(func() error {
+		return scanAndLog(stdoutPipe, "STDOUT", logger)
+	})
+	g.Go(func() error {
+		return scanAndLog(stderrPipe, "STDERR", logger)
+	})
+
+	// Wait for the output scanning goroutines.
+	if err := g.Wait(); err != nil {
+		logger.ErrorString("Error reading command output: %v", err)
+		// Continue even if there's an error in scanning
 	}
 
-	// Read stdout
-	go readPipe(stdoutPipe, "STDOUT")
-
-	// Read stderr
-	go readPipe(stderrPipe, "STDERR")
-
-	// Wait for command to finish
+	// Wait for the command to complete.
 	if err := cmd.Wait(); err != nil {
 		logger.ErrorString("Command execution failed: %v", err)
-		// Even if there's an error, the logs have been captured
+		logger.ErrorString("dir:%v ,command:%v, args:%v", dir, command, args)
+		return err
 	}
-
-	// Wait for both stdout and stderr to be processed
-	wg.Wait()
 	return nil
 }
 
-// Clone or pull repository
-func CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDir string) error {
-	// Ensure the base directory exists or create it if it doesn't
+// scanAndLog reads from the provided pipe line-by-line and logs the output.
+// It closes the pipe when done.
+func scanAndLog(pipe io.ReadCloser, prefix string, logger *logWriter.Logger) error {
+	defer pipe.Close()
+
+	scanner := bufio.NewScanner(pipe)
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch prefix {
+		case "STDOUT":
+			logger.InfoString(line)
+		case "STDERR":
+			logger.MagentaString(line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		// If the error indicates that the file is already closed, ignore it.
+		if strings.Contains(err.Error(), "file already closed") {
+			logger.InfoString("Ignored error reading %s: %v", prefix, err)
+			return nil
+		}
+		return fmt.Errorf("error reading %s: %w", prefix, err)
+	}
+	return nil
+}
+
+// CloneOrPullRepo updates a repository by either pulling only the default branch (if configured)
+// or pulling all remote branches.
+// It stashes any uncommitted changes before pulling and then applies the stash using "git stash apply".
+// If conflicts occur during stash apply, it aborts the merge and resets the repository to a safe commit.
+func (g *GitlabClient) CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDir string) error {
+	// Ensure the base directory exists.
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(baseDir, 0755); err != nil {
 			logger.RedString("Failed to create base directory: %v", err)
 			return fmt.Errorf("failed to create base directory: %v", err)
 		}
 	}
-	// Parse the URL
+
+	// Parse the repository URL.
 	u, err := url.Parse(repoURL)
 	if err != nil {
 		return err
@@ -96,14 +118,247 @@ func CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDir string) error {
 	trimPrefix = strings.TrimSuffix(trimPrefix, ".git")
 	repoPath := filepath.Join(baseDir, trimPrefix)
 
+	// If the repository doesn't exist locally, clone it.
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		logger.BlueString("Cloning repository: %s", repoURL)
 		return runCommand(logger, "", "git", "clone", repoURL, repoPath)
-	} else {
-		// Pull the latest changes
-		logger.MagentaString("Pulling latest changes for repository: %s", repoURL)
-		return runCommand(logger, repoPath, "git", "pull")
 	}
+
+	// Repository exists; update it.
+	logger.MagentaString("Updating repository: %s", repoURL)
+
+	// Fetch all remote changes.
+	if err := runCommand(logger, repoPath, "git", "fetch", "--all"); err != nil {
+		return err
+	}
+
+	// If the context flag is set to pull only the default branch:
+	if flag, ok := g.contextMap[constant.ContextValuePullDefault]; ok && flag == constant.ContextValueYES {
+		branchToPull := g.contextMap[constant.ContextValuePullBranch]
+		if branchToPull == "" {
+			return fmt.Errorf("pull branch cant be empty")
+		}
+		logger.InfoString("Pulling only branch: %s", branchToPull)
+
+		// Checkout the default branch.
+		if err := runCommand(logger, repoPath, "git", "checkout", branchToPull); err != nil {
+			logger.ErrorString("Error checking out branch %s: %v", branchToPull, err)
+			return err
+		}
+
+		// Record the current commit as safe state.
+		origHead, err := getCurrentCommit(repoPath)
+		if err != nil {
+			logger.ErrorString("Error getting current commit: %v", err)
+			return err
+		}
+
+		// Check if repository is dirty and stash if needed.
+		dirty, err := isRepoDirty(repoPath)
+		if err != nil {
+			logger.ErrorString("Error checking repository status: %v", err)
+			return err
+		}
+		stashed := false
+		if dirty {
+			logger.InfoString("Stashing uncommitted changes on branch: %s", branchToPull)
+			if err := runCommand(logger, repoPath, "git", "stash"); err != nil {
+				logger.ErrorString("Error stashing changes: %v", err)
+				return err
+			}
+			stashed = true
+		}
+
+		// Pull the latest changes.
+		if err := runCommand(logger, repoPath, "git", "pull"); err != nil {
+			logger.ErrorString("Error pulling branch %s: %v", branchToPull, err)
+			return err
+		}
+
+		// If changes were stashed, attempt to apply them.
+		if stashed {
+			logger.InfoString("Applying stashed changes on branch: %s", branchToPull)
+			if err := runCommand(logger, repoPath, "git", "stash", "apply"); err != nil {
+				logger.ErrorString("Error applying stash on branch %s: %v", branchToPull, err)
+				statusOutput, _ := getGitStatus(repoPath)
+				if strings.Contains(statusOutput, "UU") {
+					logger.ErrorString("Merge conflicts detected after stash apply on branch %s. Aborting pull...", branchToPull)
+					abortPull(repoPath, logger)
+					resetRepo(repoPath, logger, origHead)
+					runCommand(logger, repoPath, "git", "stash", "apply")
+					return fmt.Errorf("conflicts encountered when applying stash on branch %s", branchToPull)
+				}
+			} else {
+				if err := runCommand(logger, repoPath, "git", "stash", "drop"); err != nil {
+					logger.ErrorString("Error dropping stash on branch %s: %v", branchToPull, err)
+				}
+			}
+		}
+	} else {
+		// Otherwise, pull all remote branches.
+		currentBranch, err := getCurrentBranch(repoPath)
+		if err != nil {
+			logger.ErrorString("Error getting current branch: %v", err)
+			return err
+		}
+
+		branches, err := getRemoteBranches(repoPath)
+		if err != nil {
+			logger.ErrorString("Error getting remote branches: %v", err)
+			return err
+		}
+
+		for _, branch := range branches {
+			// Check if repository is dirty.
+			dirty, err := isRepoDirty(repoPath)
+			if err != nil {
+				logger.ErrorString("Error checking repository status: %v", err)
+				continue
+			}
+			stashed := false
+			if dirty {
+				logger.InfoString("Stashing uncommitted changes for branch %s", branch)
+				if err := runCommand(logger, repoPath, "git", "stash"); err != nil {
+					logger.ErrorString("Error stashing changes: %v", err)
+					continue
+				}
+				stashed = true
+			}
+
+			// Convert remote branch name to local branch name (e.g. "origin/feature" -> "feature").
+			parts := strings.Split(branch, "/")
+			localBranch := parts[len(parts)-1]
+
+			logger.InfoString("Checking out branch: %s", localBranch)
+			if err := runCommand(logger, repoPath, "git", "checkout", "-B", localBranch, branch); err != nil {
+				logger.ErrorString("Error checking out branch %s: %v", localBranch, err)
+				continue
+			}
+
+			origHead, err := getCurrentCommit(repoPath)
+			if err != nil {
+				logger.ErrorString("Error getting current commit: %v", err)
+				continue
+			}
+
+			logger.InfoString("Pulling latest changes on branch: %s", localBranch)
+			if err := runCommand(logger, repoPath, "git", "pull"); err != nil {
+				logger.ErrorString("Error pulling branch %s: %v", localBranch, err)
+				continue
+			}
+
+			if stashed {
+				logger.InfoString("Applying stashed changes on branch: %s", localBranch)
+				if err := runCommand(logger, repoPath, "git", "stash", "apply"); err != nil {
+					logger.ErrorString("Error applying stash on branch %s: %v", localBranch, err)
+					statusOutput, _ := getGitStatus(repoPath)
+					if strings.Contains(statusOutput, "UU") {
+						logger.ErrorString("Merge conflicts detected after stash apply on branch %s. Aborting pull...", localBranch)
+						abortPull(repoPath, logger)
+						resetRepo(repoPath, logger, origHead)
+						runCommand(logger, repoPath, "git", "stash", "apply")
+						continue
+					}
+				} else {
+					if err := runCommand(logger, repoPath, "git", "stash", "drop"); err != nil {
+						logger.ErrorString("Error dropping stash on branch %s: %v", localBranch, err)
+					}
+				}
+			}
+		}
+
+		// Finally, switch back to the original branch.
+		if err := runCommand(logger, repoPath, "git", "checkout", currentBranch); err != nil {
+			logger.ErrorString("Error checking out branch %s: %v", currentBranch, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// getGitStatus runs "git status --porcelain" and returns its output.
+func getGitStatus(repoPath string) (string, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// getCurrentCommit returns the current commit hash of the repository.
+func getCurrentCommit(repoPath string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("error getting current commit: %v", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// abortPull attempts to abort any merge in progress.
+func abortPull(repoPath string, logger *logWriter.Logger) {
+	logger.InfoString("Aborting merge/pull in repository.")
+	if err := runCommand(logger, repoPath, "git", "merge", "--abort"); err != nil {
+		logger.ErrorString("Error aborting merge: %v", err)
+	}
+}
+
+// resetRepo resets the repository to the given commit.
+func resetRepo(repoPath string, logger *logWriter.Logger, commit string) {
+	logger.InfoString("Resetting repository to commit: %s", commit)
+	if err := runCommand(logger, repoPath, "git", "reset", "--hard", commit); err != nil {
+		logger.ErrorString("Error resetting repository: %v", err)
+	}
+}
+
+// getRemoteBranches runs "git branch -r" and returns a slice of remote branch names.
+func getRemoteBranches(repoPath string) ([]string, error) {
+	cmd := exec.Command("git", "branch", "-r")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(out), "\n")
+	var branches []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "->") {
+			continue
+		}
+		branches = append(branches, line)
+	}
+	return branches, nil
+}
+
+// getCurrentBranch returns the current branch name.
+func getCurrentBranch(repoPath string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("error getting current branch: %v", err)
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("empty branch name")
+	}
+	return branch, nil
+}
+
+// isRepoDirty returns true if there are uncommitted changes.
+func isRepoDirty(repoPath string) (bool, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = repoPath
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("error checking repository status: %v", err)
+	}
+	return strings.TrimSpace(string(out)) != "", nil
 }
 
 // pushBranch pushes the current branch to GitLab.
@@ -117,7 +372,6 @@ func CreateBranch(logger *logWriter.Logger, repoDir, branchName, defaultBranch s
 	if err != nil {
 		return err
 	}
-
 	if currentBranch != defaultBranch {
 		if err := runCommand(logger, repoDir, "git", "checkout", defaultBranch); err != nil {
 			return err
@@ -143,20 +397,6 @@ func branchExists(repoDir, branch string) bool {
 	return strings.TrimSpace(string(out)) != ""
 }
 
-// isRepoDirty returns true if there are any uncommitted changes in the repository.
-func isRepoDirty(repoDir string) (bool, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoDir
-	out, err := cmd.Output()
-	if err != nil {
-		return false, err
-	}
-	if strings.TrimSpace(string(out)) != "" {
-		return true, nil
-	}
-	return false, nil
-}
-
 // isValidRepo checks whether the repository’s relative path matches the include/exclude criteria.
 func isValidRepo(repoPath string, includePatterns, excludePatterns []string) bool {
 	// Use path.Match for wildcard matching.
@@ -180,17 +420,6 @@ func isValidRepo(repoPath string, includePatterns, excludePatterns []string) boo
 		}
 	}
 	return false
-}
-
-// getCurrentBranch returns the current branch of the repository.
-func getCurrentBranch(repoDir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = repoDir
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
 }
 
 // getProjectIDFromRepo retrieves the project ID by parsing the remote URL.
@@ -338,14 +567,15 @@ func executeCommands(logger *logWriter.Logger, repoDir, commandStr string) error
 
 // checkoutAndResetBranch checks out to 'develop' or 'main' if not already on either.
 // If the branch is dirty, it will reset all uncommitted changes.
-func checkoutAndResetBranch(path, currentBranch string) error {
+func checkoutAndResetBranch(path, currentBranch string, logger *logWriter.Logger) error {
+	//TODO : this branch should be from cfg
 	if currentBranch != "main" && currentBranch != "develop" {
 		if branchExists(path, "develop") {
-			if err := runCommand(nil, path, "git", "checkout", "develop"); err != nil {
+			if err := runCommand(logger, path, "git", "checkout", "develop"); err != nil {
 				return fmt.Errorf("error checking out 'develop': %v", err)
 			}
 		} else if branchExists(path, "main") {
-			if err := runCommand(nil, path, "git", "checkout", "main"); err != nil {
+			if err := runCommand(logger, path, "git", "checkout", "main"); err != nil {
 				return fmt.Errorf("error checking out 'main': %v", err)
 			}
 		} else {
@@ -357,7 +587,7 @@ func checkoutAndResetBranch(path, currentBranch string) error {
 	if dirty, err := isRepoDirty(path); err != nil {
 		return fmt.Errorf("error checking repo cleanliness: %v", err)
 	} else if dirty {
-		if err := runCommand(nil, path, "git", "reset", "--hard"); err != nil {
+		if err := runCommand(logger, path, "git", "reset", "--hard"); err != nil {
 			return fmt.Errorf("error resetting dirty repository: %v", err)
 		}
 	}
