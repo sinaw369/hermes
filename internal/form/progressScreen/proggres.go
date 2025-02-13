@@ -98,7 +98,7 @@ func (m *Model) Init() tea.Cmd {
 
 // startTick sets up a periodic tick every 50ms for smoother progress updates.
 func (m *Model) startTick() tea.Cmd {
-	return tea.Tick(10*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
