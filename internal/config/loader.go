@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"github.com/spf13/viper"
+	"path/filepath"
 	"time"
 )
 
@@ -11,7 +12,15 @@ func loadString(envName string) string {
 
 	return viper.GetString(envName)
 }
+func loadFilePath(envName string) string {
+	validate(envName)
+	path := viper.GetString(envName)
 
+	if !filepath.IsAbs(path) {
+		panic(fmt.Sprintf("[%s] should be full path : %s", envName, path))
+	}
+	return path
+}
 func loadInt(envName string) int {
 	validate(envName)
 

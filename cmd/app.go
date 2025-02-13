@@ -15,6 +15,7 @@ func Run() {
 	root := &cobra.Command{Short: description}
 
 	SyncCmd := command.NewSyncCmd()
+	diffCmd := command.NewDiffCmd()
 	var HermesCmd command.HermesCmd
 
 	cfg, err := config.Load()
@@ -25,6 +26,7 @@ func Run() {
 	root.AddCommand(
 		SyncCmd.Command(cfg),
 		HermesCmd.Command(cfg),
+		diffCmd.Command(cfg),
 	)
 
 	if err := root.Execute(); err != nil {
