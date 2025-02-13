@@ -1,25 +1,28 @@
 package client
 
 import (
+	"bytes"
+	"fmt"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sinaw369/Hermes/internal/constant"
 	"github.com/sinaw369/Hermes/internal/form/progressScreen"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // InitPullRequestAutomationCLI InitPullRequestAutomation handles GitLab project automation tasks.
 func (g *GitlabClient) InitPullRequestAutomationCLI(baseDir *string) {
-	var syncDir string
 	if baseDir == nil {
-		// Determine the base directory
-		syncDir = g.getBaseDir(constant.TargetDir)
-		if syncDir == "" {
-			return
-		}
+		// Determine the base director
+		return
 	}
 	g.logWriter.InfoString("Starting GitLab project automation")
 
 	// Initialize the GitLab client
+
 	gitlabClient, err := g.createGitLabClient()
 	if err != nil {
 		return
@@ -32,7 +35,7 @@ func (g *GitlabClient) InitPullRequestAutomationCLI(baseDir *string) {
 	}
 
 	// Process projects concurrently
-	g.processProjectsConcurrentlyCLI(allProjects, syncDir)
+	g.processProjectsConcurrentlyCLI(allProjects, *baseDir)
 }
 
 func (g *GitlabClient) InitPullRequestAutomationTUI(baseDir *string) {
@@ -64,7 +67,6 @@ func (g *GitlabClient) InitPullRequestAutomationTUI(baseDir *string) {
 	}
 
 	// Process projects concurrently
-	g.logWriter.BlackOnWhiteString("88888888888888888888888888888888 %s", syncDir)
 	g.processProjectsConcurrentlyTUI(allProjects, syncDir)
 }
 
@@ -74,15 +76,15 @@ func (g *GitlabClient) InitMergeAutomationFromDir() {
 	g.logWriter.InfoString("Starting merge automation from directory...")
 
 	// 1. Determine the base directory from configuration.
-	baseDir := g.getBaseDir(constant.MergeFieldPath)
+	baseDir := g.getBaseDir(constant.ContextValueDir)
 	if baseDir == "" {
 		g.logWriter.ErrorString("Base directory is empty")
 		return
 	}
 
 	// 2. Retrieve include and exclude patterns.
-	includePatterns := g.getFieldValuesWithSeparator(constant.MergeFieldInclude, ",")
-	excludePatterns := g.getFieldValuesWithSeparator(constant.MergeFieldExclude, ",")
+	includePatterns := g.getFieldValuesWithSeparator(constant.ContextValueInclude, ",")
+	excludePatterns := g.getFieldValuesWithSeparator(constant.ContextValueExclude, ",")
 
 	// 3. Initialize a GitLab client for API operations.
 	gitlabClient, err := g.createGitLabClient()
@@ -139,7 +141,7 @@ func (g *GitlabClient) InitMergeAutomationFromDir() {
 		}
 
 		// 9. Handle checking out to "main" or "develop", if necessary, and resetting dirty repositories.
-		if err := checkoutAndResetBranch(path, currentBranch); err != nil {
+		if err := checkoutAndResetBranch(path, currentBranch, g.logWriter); err != nil {
 			g.logWriter.ErrorString("Error handling branch for %s: %v", path, err)
 			return filepath.SkipDir
 		}
@@ -213,3 +215,108 @@ func (g *GitlabClient) InitMergeAutomationFromDir() {
 		g.logWriter.ErrorString("Error walking directory: %v", err)
 	}
 }
+
+// FetchDiffCLI runs a git log command between two branches (from "origin/<branchFrom>" to "origin/<branchTo>")
+// in the repository located at repoPath and returns a formatted summary along with a boolean flag indicating
+// whether differences exist.
+func (g *GitlabClient) FetchDiffCLI(repoPath, branchFrom, branchTo string) (string, bool, error) {
+	// Prepare the git log command.
+	cmd := exec.Command("git", "log", "--pretty=format:%H - %s - %ai - %ar", "origin/"+branchFrom+"..origin/"+branchTo)
+	cmd.Dir = repoPath
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return "", false, fmt.Errorf("error running git log: %v", err)
+	}
+
+	output := strings.TrimSpace(out.String())
+	if output == "" {
+		return "No differences between " + branchFrom + " and " + branchTo, false, nil
+	}
+
+	lines := strings.Split(output, "\n")
+
+	// Define a header style using lipgloss (optional for CLI formatting).
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
+	header := strings.TrimSpace(headerStyle.Render("Number of different commits: " + strconv.Itoa(len(lines)) + "\n"))
+
+	// Format each commit line.
+	var formattedLines []string
+	for i, line := range lines {
+		// Split the line into 4 parts: commit hash, message, full date, and relative time.
+		parts := strings.SplitN(line, " - ", 4)
+		if len(parts) < 4 {
+			continue
+		}
+		commitMessage := strings.TrimSpace(parts[1])
+		fullDate := strings.TrimSpace(parts[2])
+		// commitRelativeTime := strings.TrimSpace(parts[3])
+		// Format as "1. commitMessage , fullDate , commitRelativeTime"
+		formattedLine := fmt.Sprintf("%d. %s , %s", i+1, commitMessage, fullDate)
+		formattedLines = append(formattedLines, formattedLine)
+	}
+
+	return header + strings.Join(formattedLines, "\n"), true, nil
+}
+
+// FetchDiffCLI runs a git log command between two branches (from "origin/<branchFrom>" to "origin/<branchTo>")
+// in the repository located at repoPath and returns a formatted summary along with a boolean flag indicating
+// whether differences exist.
+//func (g *GitlabClient) FetchDiffCLI(repoPath, branchFrom, branchTo string) (string, bool, error) {
+//	// Prepare the git log command.
+//	cmd := exec.Command("git", "log", "--pretty=format:%H - %s - %ai - %ar", fmt.Sprintf("origin/%s..origin/%s", branchFrom, branchTo))
+//	cmd.Dir = repoPath
+//
+//	var out bytes.Buffer
+//	cmd.Stdout = &out
+//
+//	if err := cmd.Run(); err != nil {
+//		return "", false, fmt.Errorf("error running git log: %w", err)
+//	}
+//
+//	// Trim and check output.
+//	output := strings.TrimSpace(out.String())
+//	if output == "" {
+//		return fmt.Sprintf("No differences between %s and %s", branchFrom, branchTo), false, nil
+//	}
+//
+//	// Use a scanner to iterate over each line.
+//	scanner := bufio.NewScanner(&out)
+//	var lines []string
+//	for scanner.Scan() {
+//		line := scanner.Text()
+//		if strings.TrimSpace(line) != "" {
+//			lines = append(lines, line)
+//		}
+//	}
+//	if err := scanner.Err(); err != nil {
+//		return "", false, fmt.Errorf("error scanning output: %w", err)
+//	}
+//
+//	// Define a header style using Lip Gloss.
+//	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
+//	header := headerStyle.Render(fmt.Sprintf("Number of different commits: %d\n", len(lines)))
+//
+//	// Build the formatted output.
+//	var sb strings.Builder
+//	sb.WriteString(header)
+//	separator := " , "
+//	for i, line := range lines {
+//		// Split the line into commit hash, message, full date, and relative time.
+//		parts := strings.SplitN(line, " - ", 4)
+//		if len(parts) < 4 {
+//			continue
+//		}
+//		commitMessage := strings.TrimSpace(parts[1])
+//		fullDate := strings.TrimSpace(parts[2])
+//		// Format as: "1. commitMessage , fullDate"
+//		formattedLine := fmt.Sprintf("%d. %s%s%s", i+1, commitMessage, separator, fullDate)
+//		sb.WriteString(formattedLine)
+//		if i < len(lines)-1 {
+//			sb.WriteString("\n")
+//		}
+//	}
+//
+//	return sb.String(), true, nil
+//}
