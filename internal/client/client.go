@@ -67,7 +67,7 @@ func newGitlabClient(
 	}
 	// Check if the detach mode flag is set
 	disabled := false
-	if contextMap[constant.DetachMode] == "YES" {
+	if contextMap[constant.SilentMode] == "YES" {
 		disabled = true
 	}
 
@@ -147,7 +147,7 @@ func (g *GitlabClient) fetchGitLabProjects(client *gitlab.Client) ([]*gitlab.Pro
 		ListOptions: gitlab.ListOptions{PerPage: 100, Page: 1},
 	}
 	var allProjects []*gitlab.Project
-
+	g.logWriter.InfoString("connecting to gitlab...")
 	for {
 		projects, resp, err := client.Projects.ListProjects(listOptions)
 		if err != nil {
@@ -171,31 +171,41 @@ func (g *GitlabClient) fetchGitLabProjects(client *gitlab.Client) ([]*gitlab.Pro
 	return allProjects, nil
 }
 
-// shouldIncludeProject checks if a GitLab project matches the include criteria.
 func (g *GitlabClient) shouldIncludeProject(project *gitlab.Project) bool {
-	// If Include fields are empty, they should be ignored.
-	includeSSHURL := g.contextMap[constant.PullFieldSSHURLInclude]
-	includeField := g.contextMap[constant.PullFieldInclude]
-	excludeField := g.contextMap[constant.PullFieldExclude]
+	// Retrieve filtering values from the context map.
+	includeField := g.contextMap[constant.ContextValueInclude]
+	excludeField := g.contextMap[constant.ContextValueExclude]
 
-	// If all include fields are empty, return true (not filtering)
-	if includeSSHURL == "" && includeField == "" && excludeField == "" {
+	// If all filter fields are empty, include the project.
+	if includeField == "" && excludeField == "" {
 		return true
 	}
 
-	// Check SSH URL includes the desired SSH URL pattern if not empty
-	if includeSSHURL != "" && !strings.Contains(project.SSHURLToRepo, includeSSHURL) {
-		return false
+	// Check includeField: if provided, split on commas and require at least one match.
+	if includeField != "" {
+		parts := strings.Split(includeField, ",")
+		matched := false
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" && strings.Contains(project.SSHURLToRepo, trimmed) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 
-	// Check if the project contains the specified "include" field, if not empty
-	if includeField != "" && !strings.Contains(project.SSHURLToRepo, includeField) {
-		return false
-	}
-
-	// Check if the project contains the specified "exclude" field, if not empty
-	if excludeField != "" && strings.Contains(project.SSHURLToRepo, excludeField) {
-		return false
+	// Check excludeField: if provided, split on commas and if any part matches, exclude the project.
+	if excludeField != "" {
+		parts := strings.Split(excludeField, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" && strings.Contains(project.SSHURLToRepo, trimmed) {
+				return false
+			}
+		}
 	}
 
 	return true
@@ -216,7 +226,7 @@ func (g *GitlabClient) processProjectsConcurrentlyTUI(projects []*gitlab.Project
 			repoURL := project.SSHURLToRepo
 			g.logWriter.BlueString("Processing repository: %s", repoURL)
 
-			err := CloneOrPullRepo(g.logWriter, repoURL, baseDir)
+			err := g.CloneOrPullRepo(g.logWriter, repoURL, baseDir)
 			if err != nil {
 				g.logWriter.ErrorString("Error cloning/pulling repository: %v", err)
 				g.updatesChan <- progressScreen.PackageUpdate{
@@ -245,7 +255,7 @@ func (g *GitlabClient) processProjectsConcurrentlyTUI(projects []*gitlab.Project
 // processProjectsConcurrently processes the projects with concurrency.
 func (g *GitlabClient) processProjectsConcurrentlyCLI(projects []*gitlab.Project, baseDir string) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 10) // Limit to 10 concurrent operations
+	sem := make(chan struct{}, 20) // Limit to 10 concurrent operations
 
 	for idx, project := range projects {
 		wg.Add(1)
@@ -257,7 +267,7 @@ func (g *GitlabClient) processProjectsConcurrentlyCLI(projects []*gitlab.Project
 			repoURL := project.SSHURLToRepo
 			g.logWriter.BlueString("Processing repository: %s", repoURL)
 
-			err := CloneOrPullRepo(g.logWriter, repoURL, baseDir)
+			err := g.CloneOrPullRepo(g.logWriter, repoURL, baseDir)
 			if err != nil {
 				g.logWriter.ErrorString("Error cloning/pulling repository: %v", err)
 				return
