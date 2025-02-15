@@ -31,11 +31,9 @@ Make sure that your Go bin directory is in your system's PATH so you can run the
 create ```.env``` file
 In the same directory as your compiled binary, create a file named `.env` with the following contents. Adjust the values as needed for your environment:
 ```.env
-# Directory where pull requests will be downloaded
-SYNC_DIR=path/to/download_pr_folder
 
 # Directory to display in the UI for Git diff (the base folder for file browsing)
-FILES_DIR=path/to/git_diff_folder
+WORKING_DIR=path/to/git_diff_folder
 
 # Branches to use when showing a diff in the UI
 DIFF_BRANCH_FROM=production
@@ -48,8 +46,6 @@ GITLAB_BASE_URL=https://gitlab.example.com
 
 ```
 **Notes** :
-* SYNC_DIR: This is where your application will download and sync pull request projects.
-* FILES_DIR: This directory will be used by the UI to browse and display Git diff information.
+* WORKING_DIR: This directory will be used by the UI to browse and display Git diff information.
 * DIFF_BRANCH_FROM / DIFF_BRANCH_TO: These determine which two branches to compare when showing diffs.
-* SYNC_INTERVAL: Specifies how frequently (e.g., every 1 minute) the sync process runs.
 * GITLAB_TOKEN / GITLAB_BASE_URL: Provide your GitLab token and the base URL for your GitLab instance.
