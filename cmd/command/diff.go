@@ -54,7 +54,7 @@ func (sc *DiffCmd) Command(cfg *config.Config) *cobra.Command {
 }
 func (sc *DiffCmd) FetchFromEnvironment(cfg *config.Config) {
 	if sc.baseDir == "" {
-		sc.baseDir = cfg.FileDir
+		sc.baseDir = cfg.WorkingDir
 	}
 	if sc.branchTo == "" {
 		sc.branchTo = cfg.DifBranchTO
@@ -138,7 +138,7 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 	for _, repoPath := range repos {
 		// Determine repository name relative to base directory.
 		repoName := repoPath
-		if rel, err := filepath.Rel(cfg.FileDir, repoPath); err == nil {
+		if rel, err := filepath.Rel(cfg.WorkingDir, repoPath); err == nil {
 			repoName = rel
 		}
 

@@ -187,7 +187,7 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fileList := HermesList.Config{
 					IsDir:            true,
 					StaticList:       nil,
-					InitialPath:      m.cfg.FileDir,
+					InitialPath:      m.cfg.WorkingDir,
 					Title:            "",
 					Width:            m.width,
 					Height:           m.height,
@@ -207,7 +207,7 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// If the file list model already exists, update its size with the current terminal dimensions.
 				m.fileList.List.SetSize(m.width, m.height)
 			}
-			if err := m.fileList.SetPath(m.cfg.FileDir); err != nil {
+			if err := m.fileList.SetPath(m.cfg.WorkingDir); err != nil {
 				m.LogWriter.ErrorString("Error setting file list path: %v", err)
 			}
 			m.currentScreen = ScreenShowFile

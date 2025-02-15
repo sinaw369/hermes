@@ -21,7 +21,7 @@ func Load() (config *Config, err error) {
 	return &Config{
 		GitlabBaseURL:  loadString("GITLAB_BASE_URL"),
 		GitlabToken:    loadString("GITLAB_TOKEN"),
-		FileDir:        loadFilePath("FILES_DIR"),
+		WorkingDir:     loadFilePath("WORKING_DIR"),
 		DiffBranchFrom: loadString("DIFF_BRANCH_FROM"),
 		DifBranchTO:    loadString("DIFF_BRANCH_TO"),
 	}, nil

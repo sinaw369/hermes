@@ -38,11 +38,8 @@ SYNC_DIR=path/to/download_pr_folder
 FILES_DIR=path/to/git_diff_folder
 
 # Branches to use when showing a diff in the UI
-DIFF_BRANCH_FROM=develop
-DIFF_BRANCH_TO=production
-
-# Synchronization interval (e.g., "1m" for one minute)
-SYNC_INTERVAL=1m
+DIFF_BRANCH_FROM=production
+DIFF_BRANCH_TO=develop
 
 # GitLab credentials and API base URL
 GITLAB_TOKEN=your_gitlab_token_here

@@ -3,7 +3,7 @@ package config
 type Config struct {
 	GitlabBaseURL  string
 	GitlabToken    string
-	FileDir        string
+	WorkingDir     string
 	DiffBranchFrom string
 	DifBranchTO    string
 }

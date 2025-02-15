@@ -33,7 +33,7 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 			// Retrieve flag values or read from viper/env if not provided.
 			syncDir, _ := cmd.Flags().GetString("dir")
 			if syncDir == "" {
-				syncDir = cfg.FileDir
+				syncDir = cfg.WorkingDir
 			}
 			if !filepath.IsAbs(syncDir) {
 				log.Println("dir should be full path:", syncDir)
