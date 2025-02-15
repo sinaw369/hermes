@@ -119,17 +119,13 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 		repos = []string{sc.baseDir}
 	}
 
-	// Dynamically obtain the terminal width.
 	width, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
-		width = 120 // fallback width if error occurs
+		width = 120
 	} else {
-		// Optionally subtract 20 columns.
 		width = width - 20
 	}
-	//separator := strings.Repeat("-", width)
 
-	// Create a diff box style once.
 	diffBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		Width(width)
@@ -142,18 +138,15 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 			repoName = rel
 		}
 
-		// Format header using Lip Gloss.
 		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("85"))
 		header := headerStyle.Render("Repository: " + repoName)
 
-		// Fetch diff summary from the Git client.
 		diff, hasChange, err := gitClient.FetchDiffCLI(repoPath, sc.branchFrom, sc.branchTo)
 		if err != nil {
 			logger.RedString("Error fetching diff for %s: it seems branch %s or %s does not exist\n", repoName, sc.branchFrom, sc.branchTo)
 			continue
 		}
 
-		// Only print the diff if either we want all or we want only repos with diffs and there is a diff.
 		if !sc.onlyWithDiff || (sc.onlyWithDiff && hasChange) {
 			diffBox := diffBoxStyle.Render(diff)
 			fmt.Println(header)

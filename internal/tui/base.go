@@ -170,7 +170,6 @@ func (m *Model) updateListScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updatedList, cmd := m.optionList.Update(msg)
 	m.optionList = updatedList.(*HermesList.Model)
 
-	// Check if an option was selected.
 	if m.optionList.Choice != "" {
 		m.LogWriter.InfoString("Option selected: %s", m.optionList.Choice)
 		switch m.optionList.Choice {
@@ -236,13 +235,12 @@ func (m *Model) updatePullScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Create updates channel and a context for cancellation.
 		updatesChan := make(chan progressScreen.PackageUpdate)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		// In a more advanced scenario, you might store cancel() to trigger cancellation later.
+		//TODO you might store cancel() to trigger cancellation later.
 		defer cancel()
 
 		// Collect form values.
 		values := m.pullScreen.GetValue()
 
-		// Initialize the GitLab client with the context.
 		gClient, err := client.NewTUIGitClient(ctx, updatesChan, values, m.cfg, m.logsScreen)
 		if err != nil {
 			m.LogWriter.RedString("GitClient Initialization Failed: %v", err)
@@ -257,9 +255,8 @@ func (m *Model) updatePullScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.LogWriter.YellowString("Pull Automation Starting...")
 		// Launch the GitLab client processing in a separate goroutine.
-		go gClient.InitPullRequestAutomationTUI(nil) // (Note: If desired, gClient can be enhanced to accept the context.)
+		go gClient.InitPullRequestAutomationTUI(nil)
 
-		// Initialize the progress screen with the updates channel.
 		m.progressScreen = progressScreen.NewModel(updatesChan, m.LogWriter)
 		return m, m.progressScreen.Init()
 	}
@@ -281,7 +278,7 @@ func (m *Model) updateAutoMergeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Create updates channel and a context for cancellation.
 		updatesChan := make(chan progressScreen.PackageUpdate)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		// In a more advanced scenario, you might store cancel() to trigger cancellation later.
+		// TODO you might store cancel() to trigger cancellation later.
 		defer cancel()
 
 		// Collect form values.
@@ -302,7 +299,7 @@ func (m *Model) updateAutoMergeScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.LogWriter.YellowString("Pull Automation Starting...")
 		// Launch the GitLab client processing in a separate goroutine.
-		go gClient.InitMergeAutomationFromDir() // (Note: If desired, gClient can be enhanced to accept the context.)
+		go gClient.InitMergeAutomationFromDir()
 
 		// Initialize the progress screen with the updates channel.
 		m.progressScreen = progressScreen.NewModel(updatesChan, m.LogWriter)
@@ -345,7 +342,6 @@ func (m *Model) updateShowFileScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		repoPath := gitMsg.Path
 
 		// If diffScreen is not yet initialized, create it.
-		// (Assuming you want to show diff between branches specified in your configuration)
 		if m.diffScreen == nil {
 			m.diffScreen = diffscreen.NewDiffModel(m.width, m.height, repoPath, m.cfg.DiffBranchFrom, m.cfg.DifBranchTO)
 		} else {

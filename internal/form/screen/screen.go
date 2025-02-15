@@ -211,7 +211,7 @@ func (m *Model) prevInput() {
 
 // GetValue collects the values entered in the input fields and returns them as a map
 func (m *Model) GetValue() map[string]string {
-	values := make(map[string]string) // Initialize the map
+	values := make(map[string]string)
 
 	// Loop through each input field in the model
 	for _, inputField := range m.Inputs {

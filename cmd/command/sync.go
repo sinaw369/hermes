@@ -25,12 +25,10 @@ func NewSyncCmd() *SyncCmd {
 	}
 }
 func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
-	// Here, define the "sync" subcommand and its flags.
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync projects",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Retrieve flag values or read from viper/env if not provided.
 			syncDir, _ := cmd.Flags().GetString("dir")
 			if syncDir == "" {
 				syncDir = cfg.WorkingDir
@@ -47,14 +45,11 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 				sc.contextValues[constant.ContextValuePullDefault] = constant.ContextValueYES
 				sc.contextValues[constant.ContextValuePullBranch] = pullBranch
 			}
-			// Check if the user wants to detach
 			if sc.silentMode {
-				// DETACHED mode (like `docker run -d`).
 				sc.contextValues[constant.SilentMode] = "YES"
 				fmt.Printf("Syncing in SilentMode mode. Press Ctrl+C to stop.\nDir=%s\n", syncDir)
 				sc.syncProjects(syncDir, cfg)
 			} else {
-				// We block in this function, showing logs or any needed output.
 				sc.contextValues[constant.SilentMode] = "NO"
 				log.Printf("Syncing projects in %s...\n", syncDir)
 				start := time.Now()
@@ -73,7 +68,6 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 	return cmd
 }
 
-// syncProjects is your actual sync logic.
 func (sc *SyncCmd) syncProjects(syncDir string, cfg *config.Config) {
 	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues, cfg)
 	if err != nil {
@@ -84,7 +78,6 @@ func (sc *SyncCmd) syncProjects(syncDir string, cfg *config.Config) {
 
 }
 
-// parseInterval is a helper to parse a duration string into time.Duration.
 func parseInterval(interval string) time.Duration {
 	dur, err := time.ParseDuration(interval)
 	if err != nil {

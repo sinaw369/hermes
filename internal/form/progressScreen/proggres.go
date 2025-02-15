@@ -64,13 +64,11 @@ var (
 
 // NewModel initializes and returns a new progress screen model.
 func NewModel(updatesChan <-chan PackageUpdate, logger *logWriter.Logger) *Model {
-	// Initialize the progress bar without percentage display.
 	p := progress.New(
 		progress.WithDefaultGradient(),
 		progress.WithoutPercentage(),
 	)
 
-	// Initialize the spinner.
 	s := spinner.New()
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
@@ -165,8 +163,6 @@ Loop:
 	case tickMsg:
 		// Schedule the next tick.
 		cmds = append(cmds, m.startTick())
-
-		// Update the spinner.
 		cmds = append(cmds, m.spinner.Tick)
 
 	default:
@@ -208,7 +204,6 @@ func (m *Model) View() string {
 	}
 	m.showLine++
 
-	// Spinner view
 	spin := m.spinner.View() + " "
 
 	// Current package info

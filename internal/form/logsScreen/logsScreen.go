@@ -184,10 +184,6 @@ func max(a, b int) int {
 	return b
 }
 
-// -----------------------------------------------------------------------------
-// Tab management
-// -----------------------------------------------------------------------------
-
 // AddTab creates a new tab (if not already existing) and returns it's buffer.
 func (m *LogModel) AddTab(name string) *bytes.Buffer {
 	m.mu.Lock()
@@ -238,7 +234,6 @@ func (m *LogModel) AppendToTab(name, data string) {
 			m.tabs[i].buf.WriteString(data)
 			m.tabs[i].mu.Unlock()
 
-			// If the appended tab is active, mark content changed
 			if i == m.activeTab {
 				m.contentChanged = true
 			}

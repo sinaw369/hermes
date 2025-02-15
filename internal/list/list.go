@@ -281,13 +281,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if filepath.IsAbs(selected.Path) {
 					fullPath = selected.Path
 				} else {
-					// Here, m.CurrentPath is already an absolute path based on your env FILES_DIR.
+					// Here, m.CurrentPath is already an absolute path based on your env WORKING_DIR.
 					fullPath = filepath.Join(m.CurrentPath, selected.Name)
 				}
 
 				// Check if the selected folder is a Git repository.
 				// (i.e. a .git folder exists inside fullPath)
-
 				gitPath := filepath.Join(fullPath, ".git")
 				if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
 					m.logWriter.InfoString("Git repository found at: %s", fullPath)

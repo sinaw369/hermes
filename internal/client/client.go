@@ -58,14 +58,12 @@ func newGitlabClient(
 	logsModel *logsScreen.LogModel,
 ) (*GitlabClient, error) {
 
-	// Fetch the GitLab token and URL from environment variables
 	gitlabToken := cfg.GitlabToken
 	gitlabURL := cfg.GitlabBaseURL
 
 	if gitlabToken == "" || gitlabURL == "" {
 		return nil, fmt.Errorf("error: GITLAB_TOKEN or GITLAB_BASE_URL is not set in environment")
 	}
-	// Check if the detach mode flag is set
 	disabled := false
 	if contextMap[constant.SilentMode] == "YES" {
 		disabled = true
@@ -214,14 +212,14 @@ func (g *GitlabClient) shouldIncludeProject(project *gitlab.Project) bool {
 // processProjectsConcurrently processes the projects with concurrency.
 func (g *GitlabClient) processProjectsConcurrentlyTUI(projects []*gitlab.Project, baseDir string) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 10) // Limit to 10 concurrent operations
+	sem := make(chan struct{}, 20)
 
 	for idx, project := range projects {
 		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
+		sem <- struct{}{}
 		go func(idx int, project *gitlab.Project) {
 			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
+			defer func() { <-sem }()
 
 			repoURL := project.SSHURLToRepo
 			g.logWriter.BlueString("Processing repository: %s", repoURL)
@@ -255,14 +253,14 @@ func (g *GitlabClient) processProjectsConcurrentlyTUI(projects []*gitlab.Project
 // processProjectsConcurrently processes the projects with concurrency.
 func (g *GitlabClient) processProjectsConcurrentlyCLI(projects []*gitlab.Project, baseDir string) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 20) // Limit to 10 concurrent operations
+	sem := make(chan struct{}, 20)
 
 	for idx, project := range projects {
 		wg.Add(1)
-		sem <- struct{}{} // Acquire semaphore
+		sem <- struct{}{}
 		go func(idx int, project *gitlab.Project) {
 			defer wg.Done()
-			defer func() { <-sem }() // Release semaphore
+			defer func() { <-sem }()
 
 			repoURL := project.SSHURLToRepo
 			g.logWriter.BlueString("Processing repository: %s", repoURL)

@@ -39,7 +39,6 @@ func runCommand(logger *logWriter.Logger, dir, command string, args ...string) e
 		return err
 	}
 
-	// Start the command.
 	if err := cmd.Start(); err != nil {
 		logger.ErrorString("Error starting command: %v", err)
 		return err
@@ -101,7 +100,6 @@ func scanAndLog(pipe io.ReadCloser, prefix string, logger *logWriter.Logger) err
 // It stashes any uncommitted changes before pulling and then applies the stash using "git stash apply".
 // If conflicts occur during stash apply, it aborts the merge and resets the repository to a safe commit.
 func (g *GitlabClient) CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDir string) error {
-	// Ensure the base directory exists.
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(baseDir, 0755); err != nil {
 			logger.RedString("Failed to create base directory: %v", err)
@@ -109,7 +107,6 @@ func (g *GitlabClient) CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDi
 		}
 	}
 
-	// Parse the repository URL.
 	u, err := url.Parse(repoURL)
 	if err != nil {
 		return err
@@ -474,7 +471,7 @@ func createMergeRequest(logger *logWriter.Logger, gitlabClient *gitlab.Client, p
 		SourceBranch:       &branchName,
 		TargetBranch:       gitlab.Ptr(targetBranch),
 		Title:              gitlab.Ptr(fmt.Sprintf("Merge branch '%s' into %s", branchName, targetBranch)),
-		Description:        gitlab.Ptr("Automatically created merge request after running `go mod tidy`."),
+		Description:        gitlab.Ptr("Automatically created merge request after running command"),
 		AssigneeID:         &user.ID,
 		RemoveSourceBranch: gitlab.Ptr(true),
 	}
@@ -518,12 +515,10 @@ func countMatchingRepositories(baseDir string, includePatterns, excludePatterns 
 		if err != nil {
 			return err
 		}
-		// Process only directories.
 		if !info.IsDir() {
 			return nil
 		}
 
-		// Check if the directory is a Git repository (by the existence of ".git").
 		gitPath := filepath.Join(path, ".git")
 		if _, err := os.Stat(gitPath); os.IsNotExist(err) {
 			return nil // not a git repository; continue walking
@@ -558,7 +553,6 @@ func executeCommands(logger *logWriter.Logger, repoDir, commandStr string) error
 		cmdName := parts[0]
 		cmdArgs := parts[1:]
 
-		// Log and run the command.
 		logger.BlueString("Running command: %s with args %v in %s", cmdName, cmdArgs, repoDir)
 		if err := runCommand(logger, repoDir, cmdName, cmdArgs...); err != nil {
 			logger.ErrorString("Error running command '%s' in %s: %v", cmdStr, repoDir, err)
@@ -586,7 +580,6 @@ func checkoutAndResetBranch(path, currentBranch string, logger *logWriter.Logger
 		}
 	}
 
-	// Ensure the branch is clean.
 	if dirty, err := isRepoDirty(path); err != nil {
 		return fmt.Errorf("error checking repo cleanliness: %v", err)
 	} else if dirty {
