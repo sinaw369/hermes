@@ -52,13 +52,38 @@ func (sc *DiffCmd) Command(cfg *config.Config) *cobra.Command {
 	return diffCmd
 }
 func (sc *DiffCmd) startApp(cfg *config.Config) error {
+	if sc.baseDir == "" {
+		sc.baseDir = cfg.FileDir
+	}
 	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues, cfg)
 	if err != nil {
 		return err
 	}
 
 	var repos []string
-	if sc.pathPattern != "" {
+
+	// Check if baseDir contains glob characters.
+	if strings.ContainsAny(sc.baseDir, "*?[]") {
+		matches, err := filepath.Glob(sc.baseDir)
+		if err != nil {
+			return fmt.Errorf("error parsing baseDir glob: %v", err)
+		}
+		for _, m := range matches {
+			info, err := os.Stat(m)
+			if err != nil || !info.IsDir() {
+				continue
+			}
+			// Check if the directory contains a .git folder.
+			gitPath := filepath.Join(m, ".git")
+			if gitInfo, err := os.Stat(gitPath); err == nil && gitInfo.IsDir() {
+				repos = append(repos, m)
+			}
+		}
+		if len(repos) == 0 {
+			return fmt.Errorf("no git repositories found matching baseDir pattern: %s", sc.baseDir)
+		}
+	} else if sc.pathPattern != "" {
+		// Use baseDir and pathPattern together as a glob.
 		fullPattern := filepath.Join(sc.baseDir, sc.pathPattern)
 		matches, err := filepath.Glob(fullPattern)
 		if err != nil {
@@ -79,7 +104,7 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 			return fmt.Errorf("no git repositories found matching pattern: %s", fullPattern)
 		}
 	} else {
-		// If no pattern provided, assume baseDir itself is a repository.
+		// If no glob or pathPattern is provided, assume baseDir itself is a repository.
 		repos = []string{sc.baseDir}
 	}
 
