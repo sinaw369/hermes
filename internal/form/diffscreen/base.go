@@ -90,7 +90,7 @@ func (m *Model) fetchDiff() {
 			continue // Skip if not properly formatted
 		}
 
-		//commitHash := commitParts[0]
+		commitHash := commitParts[0]
 		commitMessage := strings.TrimSpace(commitParts[1])
 		fullDate := strings.TrimSpace(commitParts[2])
 		// commitRelativeTime := strings.TrimSpace(commitParts[3])
@@ -99,8 +99,8 @@ func (m *Model) fetchDiff() {
 		//dateOnly := strings.Split(fullDate, " ")[0]
 
 		// Format the commit line properly
-		formattedCommit := fmt.Sprintf("%d. %s%s%s%s",
-			i+1, commitMessage, separator, fullDate, separator)
+		formattedCommit := fmt.Sprintf("%d. %s%s%s%s%s%s",
+			i+1, commitMessage, separator, commitHash, separator, fullDate, separator)
 
 		formattedLines = append(formattedLines, formattedCommit)
 	}

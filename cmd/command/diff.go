@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sinaw369/Hermes/internal/client"
 	"github.com/sinaw369/Hermes/internal/config"
+	"github.com/sinaw369/Hermes/internal/logWriter"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"log"
@@ -51,10 +52,20 @@ func (sc *DiffCmd) Command(cfg *config.Config) *cobra.Command {
 
 	return diffCmd
 }
-func (sc *DiffCmd) startApp(cfg *config.Config) error {
+func (sc *DiffCmd) FetchFromEnvironment(cfg *config.Config) {
 	if sc.baseDir == "" {
 		sc.baseDir = cfg.FileDir
 	}
+	if sc.branchTo == "" {
+		sc.branchTo = cfg.DifBranchTO
+	}
+	if sc.branchFrom == "" {
+		sc.branchFrom = cfg.DiffBranchFrom
+	}
+}
+func (sc *DiffCmd) startApp(cfg *config.Config) error {
+	sc.FetchFromEnvironment(cfg)
+	logger := logWriter.NewLogger(os.Stdout, false, false)
 	gitClient, err := client.NewCLIGitClient(context.Background(), sc.contextValues, cfg)
 	if err != nil {
 		return err
@@ -116,7 +127,7 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 		// Optionally subtract 20 columns.
 		width = width - 20
 	}
-	separator := strings.Repeat("-", width)
+	//separator := strings.Repeat("-", width)
 
 	// Create a diff box style once.
 	diffBoxStyle := lipgloss.NewStyle().
@@ -132,13 +143,13 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 		}
 
 		// Format header using Lip Gloss.
-		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("85"))
 		header := headerStyle.Render("Repository: " + repoName)
 
 		// Fetch diff summary from the Git client.
 		diff, hasChange, err := gitClient.FetchDiffCLI(repoPath, sc.branchFrom, sc.branchTo)
 		if err != nil {
-			fmt.Printf("Error fetching diff for %s: %v\n", repoName, err)
+			logger.RedString("Error fetching diff for %s: it seems branch %s or %s does not exist\n", repoName, sc.branchFrom, sc.branchTo)
 			continue
 		}
 
@@ -147,7 +158,6 @@ func (sc *DiffCmd) startApp(cfg *config.Config) error {
 			diffBox := diffBoxStyle.Render(diff)
 			fmt.Println(header)
 			fmt.Println(diffBox)
-			fmt.Println(separator)
 			fmt.Println()
 		}
 	}

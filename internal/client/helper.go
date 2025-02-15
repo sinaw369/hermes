@@ -121,7 +121,10 @@ func (g *GitlabClient) CloneOrPullRepo(logger *logWriter.Logger, repoURL, baseDi
 	// If the repository doesn't exist locally, clone it.
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		logger.BlueString("Cloning repository: %s", repoURL)
-		return runCommand(logger, "", "git", "clone", repoURL, repoPath)
+		err := runCommand(logger, "", "git", "clone", repoURL, repoPath)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Repository exists; update it.

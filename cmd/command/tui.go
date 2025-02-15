@@ -15,8 +15,8 @@ type HermesCmd struct{}
 func (hc *HermesCmd) Command(cfg *config.Config) *cobra.Command {
 	// rootCmd defines what happens when you run "hermes" with no subcommand.
 	return &cobra.Command{
-		Use:   "hermes",
-		Short: "Hermes CLI",
+		Use:   "ui",
+		Short: "launching the user interface",
 		Run: func(cmd *cobra.Command, args []string) {
 			// If the user just runs "hermes", we start the TUI.
 			fmt.Println("Launching TUI...")

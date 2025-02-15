@@ -7,10 +7,10 @@ import (
 )
 
 func Load() (config *Config, err error) {
+
 	viper.SetConfigType("env")
 	viper.AddConfigPath(".")
 	viper.SetConfigName(".env")
-	viper.AllowEmptyEnv(false)
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err != nil {
 		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {

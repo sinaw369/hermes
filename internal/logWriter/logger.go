@@ -31,6 +31,11 @@ func NewLogger(writer io.Writer, LstdFlags, disabled bool) *Logger {
 	}
 }
 
+// Error method makes Logger implement the error interface
+func (l *Logger) Error() string {
+	return "Logger: error occurred"
+}
+
 // InfoString logs a formatted message in white color
 func (l *Logger) InfoString(format string, a ...interface{}) {
 	if !l.disabled {

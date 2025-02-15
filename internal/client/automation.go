@@ -238,7 +238,7 @@ func (g *GitlabClient) FetchDiffCLI(repoPath, branchFrom, branchTo string) (stri
 	lines := strings.Split(output, "\n")
 
 	// Define a header style using lipgloss (optional for CLI formatting).
-	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("85"))
 	header := strings.TrimSpace(headerStyle.Render("Number of different commits: " + strconv.Itoa(len(lines)) + "\n"))
 
 	// Format each commit line.
@@ -249,11 +249,12 @@ func (g *GitlabClient) FetchDiffCLI(repoPath, branchFrom, branchTo string) (stri
 		if len(parts) < 4 {
 			continue
 		}
+		commitHash := strings.TrimSpace(parts[0])
 		commitMessage := strings.TrimSpace(parts[1])
 		fullDate := strings.TrimSpace(parts[2])
 		// commitRelativeTime := strings.TrimSpace(parts[3])
-		// Format as "1. commitMessage , fullDate , commitRelativeTime"
-		formattedLine := fmt.Sprintf("%d. %s , %s", i+1, commitMessage, fullDate)
+		// Format as "1. commitMessage , commitHash , fullDate"
+		formattedLine := fmt.Sprintf("%d. %s , %s , %s", i+1, commitMessage, commitHash, fullDate)
 		formattedLines = append(formattedLines, formattedLine)
 	}
 

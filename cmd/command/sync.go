@@ -42,7 +42,7 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 			sc.contextValues[constant.TargetDir] = syncDir
 			sc.contextValues[constant.ContextValueInclude], _ = cmd.Flags().GetString("include")
 			sc.contextValues[constant.ContextValueExclude], _ = cmd.Flags().GetString("exclude")
-			pullBranch, _ := cmd.Flags().GetString("pullBranch")
+			pullBranch, _ := cmd.Flags().GetString("pull-branch")
 			if pullBranch != "" {
 				sc.contextValues[constant.ContextValuePullDefault] = constant.ContextValueYES
 				sc.contextValues[constant.ContextValuePullBranch] = pullBranch
@@ -59,8 +59,8 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 				log.Printf("Syncing projects in %s...\n", syncDir)
 				start := time.Now()
 				sc.syncProjects(syncDir, cfg)
-				elapsed := time.Since(start)
-				log.Printf("Syncing projects in %s...\ndone\nelapsedtime:%v", syncDir, elapsed)
+				elapsed := time.Since(start).Minutes()
+				log.Printf("Syncing projects in %s...\ndone\nelapsedtime:%v minutes", syncDir, elapsed)
 			}
 		},
 	}
@@ -68,7 +68,7 @@ func (sc *SyncCmd) Command(cfg *config.Config) *cobra.Command {
 	cmd.Flags().String("dir", "", "Directory to sync projects and should be full path")
 	cmd.Flags().String("include", "", "include project with patterns (comma-separated)")
 	cmd.Flags().String("exclude", "", "exclude project with patterns (comma-separated)")
-	cmd.Flags().String("pullBranch", "", "the target branch witch you want to just pull it")
+	cmd.Flags().String("pull-branch", "", "the target branch witch you want to just pull it")
 
 	return cmd
 }
